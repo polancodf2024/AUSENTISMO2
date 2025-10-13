@@ -211,6 +211,7 @@ class SistemaCorreo:
                     <p><strong>Hora de registro:</strong> {datos_registro['hora_registro']}</p>
                     <p><strong>Tipo de registro:</strong> {datos_registro['tipo_registro']}</p>
                     <p><strong>Incidencia:</strong> {datos_registro.get('incidencia', 'NO')}</p>
+                    <p><strong>Suplencia:</strong> {datos_registro.get('suplencia', 'NO')}</p>
                 </div>
                 
                 <p style="margin-top: 20px;">
@@ -245,7 +246,7 @@ class SistemaCorreo:
 class SistemaEnfermeria:
     def __init__(self):
         self.SERVICIOS = [
-            "Dirección-Enfermería", "Instituto", 
+            "Dirección-Enfermería", 
             "Consulta-Externa",
             "Diagnóstico",
             "CEyE-Hospitalización",
@@ -268,7 +269,6 @@ class SistemaEnfermeria:
             "enfermera general A",
             "enfermera general B",
             "enfermera general C",
-            "enfermera general D",
             "enfermera especialista",
             "ayudante general",
             "camillero"
@@ -311,7 +311,7 @@ class SistemaEnfermeria:
             'username': 'POLANCO6',
             'password': 'tt6plco6',
             'port': 3792,
-            'remote_dir': '/home/POLANCO6/AUSENTISMO',
+            'remote_dir': '/home/POLANCO6/AUSENTISMO2',
             'file_creacion_enfermeras2': 'aus_creacion_enfermeras2.csv',
             'file_asistencia_enfermeras2': 'aus_asistencia_enfermeras2.csv',
             'file_historico_enfermeras2': 'aus_historico_enfermeras2.csv'
@@ -379,9 +379,9 @@ class SistemaEnfermeria:
             # Leer el archivo CSV y buscar la contraseña
             df = pd.read_csv(io.StringIO(contenido))
             
-            # Verificar si la contraseña ya existe (columna 5, índice 4)
-            if not df.empty and len(df.columns) > 4:
-                if password in df.iloc[:, 4].values:
+            # Verificar si la contraseña ya existe (columna 6, índice 5)
+            if not df.empty and len(df.columns) > 5:
+                if password in df.iloc[:, 5].values:
                     return True, "Esta contraseña ya está registrada en el sistema remoto"
             
             return False, "Contraseña disponible"
@@ -398,7 +398,7 @@ class SistemaEnfermeria:
             return False, f"Error al verificar contraseña: {str(e)}"
 
     def agregar_registro_remoto(self, datos_usuario):
-        """Agrega un registro al archivo remoto aus_creacion_enfermeras2.csv"""
+        """Agrega un registro al archivo remoto aus_creacion_enfermeras2.csv con los nuevos campos"""
         ssh = self.conectar_ssh()
         if not ssh:
             st.warning("⚠️ No se pudo conectar al servidor remoto. El registro se guardó solo localmente.")
@@ -408,7 +408,7 @@ class SistemaEnfermeria:
             sftp = ssh.open_sftp()
             remote_file_path = f"{self.remote_config['remote_dir']}/{self.remote_config['file_creacion_enfermeras2']}"
             
-            # Preparar los datos en formato CSV
+            # Preparar los datos en formato CSV con los NUEVOS CAMPOS
             fila_csv = [
                 datos_usuario['numero_economico'],
                 datos_usuario['puesto'],
@@ -416,7 +416,10 @@ class SistemaEnfermeria:
                 datos_usuario['servicio'],
                 datos_usuario['turno_laboral'],
                 datos_usuario['password'],
-                datos_usuario.get('correo_electronico', '')  # Nuevo campo de correo
+                datos_usuario.get('correo_electronico', ''),  # Campo de correo
+                datos_usuario.get('suplencia', 'NO'),  # NUEVO CAMPO: suplencia
+                datos_usuario.get('numero_evento', '1'),  # NUEVO CAMPO: numero_evento (siempre 1)
+                datos_usuario.get('numero_consecutivo', '1')  # NUEVO CAMPO: numero_consecutivo (siempre 1)
             ]
             
             # Verificar si el archivo existe y leer su contenido
@@ -844,6 +847,7 @@ class SistemaEnfermeria:
             - Elija puesto y servicio
             - Cree su contraseña única
             - 📧 Agregue su correo electrónico (opcional)
+            - 📋 Indique si es suplencia
             """)
             if st.button("📋 Ir a Registro", use_container_width=True):
                 st.session_state.modo = "registro"
@@ -887,6 +891,9 @@ class SistemaEnfermeria:
             with col_info2:
                 st.write(f"**Servicio:** {datos['servicio']}")
                 st.write(f"**Turno:** {datos['turno_laboral']}")
+                st.write(f"**Suplencia:** {datos.get('suplencia', 'NO')}")
+                st.write(f"**Número evento:** {datos.get('numero_evento', '1')}")
+                st.write(f"**Número consecutivo:** {datos.get('numero_consecutivo', '1')}")
                 st.write(f"**Fecha de registro:** {datos['fecha_registro']}")
             
             # Estado del almacenamiento remoto
@@ -940,7 +947,8 @@ class SistemaEnfermeria:
                     'turno_laboral': '',
                     'password': '',
                     'confirmar_password': '',
-                    'correo_electronico': ''
+                    'correo_electronico': '',
+                    'suplencia': 'NO'  # NUEVO CAMPO: suplencia por defecto NO
                 }
             
             # Mostrar formulario de registro SIN clear_on_submit
@@ -980,6 +988,17 @@ class SistemaEnfermeria:
                         index=puesto_index,
                         help="Seleccione su puesto",
                         key="puesto_select"
+                    )
+                    
+                    # NUEVO CAMPO: Suplencia (SI/NO)
+                    suplencia_options = ["NO", "SI"]
+                    suplencia_index = suplencia_options.index(st.session_state.form_data['suplencia'])
+                    suplencia = st.selectbox(
+                        "¿Es suplencia?*",
+                        options=suplencia_options,
+                        index=suplencia_index,
+                        help="Seleccione SI si es una suplencia, NO si es personal regular",
+                        key="suplencia_select"
                     )
                     
                 with col2:
@@ -1108,7 +1127,8 @@ class SistemaEnfermeria:
                         'turno_laboral': turno_laboral,
                         'password': password,
                         'confirmar_password': confirmar_password,
-                        'correo_electronico': correo_electronico
+                        'correo_electronico': correo_electronico,
+                        'suplencia': suplencia
                     }
                     
                     # Validaciones
@@ -1140,6 +1160,10 @@ class SistemaEnfermeria:
                     if not turno_laboral:
                         errores.append("Debe seleccionar un turno laboral.")
                         campos_con_error.append('turno_laboral')
+                    
+                    if not suplencia:
+                        errores.append("Debe indicar si es suplencia o no.")
+                        campos_con_error.append('suplencia')
                     
                     if not password:
                         errores.append("La contraseña es obligatoria.")
@@ -1198,13 +1222,14 @@ class SistemaEnfermeria:
                         'turno_laboral': turno_laboral,
                         'password': password,
                         'correo_electronico': correo_electronico,
+                        'suplencia': suplencia,  # NUEVO CAMPO
                         'registros_entrada': [],
                         'fecha_registro': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     
                     self.guardar_datos()
                     
-                    # Preparar datos para el archivo remoto
+                    # Preparar datos para el archivo remoto CON LOS NUEVOS CAMPOS
                     datos_remoto = {
                         'numero_economico': numero_economico,
                         'puesto': puesto,
@@ -1212,7 +1237,10 @@ class SistemaEnfermeria:
                         'servicio': servicio,
                         'turno_laboral': turno_laboral,
                         'password': password,
-                        'correo_electronico': correo_electronico
+                        'correo_electronico': correo_electronico,
+                        'suplencia': suplencia,  # NUEVO CAMPO
+                        'numero_evento': '1',  # NUEVO CAMPO (siempre 1)
+                        'numero_consecutivo': '1'  # NUEVO CAMPO (siempre 1)
                     }
                     
                     # Agregar registro al archivo remoto
@@ -1228,7 +1256,8 @@ class SistemaEnfermeria:
                         'turno_laboral': '',
                         'password': '',
                         'confirmar_password': '',
-                        'correo_electronico': ''
+                        'correo_electronico': '',
+                        'suplencia': 'NO'
                     }
                     
                     # Guardar datos para mostrar en la siguiente ejecución
@@ -1241,6 +1270,9 @@ class SistemaEnfermeria:
                         'turno_laboral': turno_laboral,
                         'password': password,
                         'correo_electronico': correo_electronico,
+                        'suplencia': suplencia,
+                        'numero_evento': '1',
+                        'numero_consecutivo': '1',
                         'fecha_registro': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         'exito_remoto': exito_remoto
                     }
@@ -1322,6 +1354,7 @@ class SistemaEnfermeria:
         <p><strong>Servicio:</strong> {usuario['servicio']}</p>
         <p><strong>Turno asignado:</strong> {usuario['turno_laboral']}</p>
         <p><strong>Número económico:</strong> {numero_economico}</p>
+        <p><strong>Suplencia:</strong> {usuario.get('suplencia', 'NO')}</p>
         <p><strong>Tipo de registro:</strong> <span style='color: green; font-weight: bold;'>ENTRADA</span></p>
         </div>
         """, unsafe_allow_html=True)
@@ -1330,7 +1363,7 @@ class SistemaEnfermeria:
         registro_anterior = self.obtener_registro_anterior_asistencia(numero_economico)
         
         if registro_anterior:
-            st.info(f"📋 **Registro anterior encontrado:** {registro_anterior.get('fecha_turno', 'N/A')} - {registro_anterior.get('incidencias', 'N/A')}")
+            st.info(f"📋 **Registro anterior encontrado:** {registro_anterior.get('fecha_turno', 'N/A')} - {registro_anterior.get('incidencias', 'N/A')} - Suplencia: {registro_anterior.get('suplencia', 'N/A')}")
         
         # Opción para registrar incidencia en lugar de asistencia normal
         st.markdown("---")
@@ -1365,7 +1398,7 @@ class SistemaEnfermeria:
                 # Determinar fecha de turno
                 fecha_turno = self.determinar_fecha_turno(usuario['turno_laboral'], hora_actual)
                 
-                # Preparar datos para archivo remoto
+                # Preparar datos para archivo remoto CON EL NUEVO CAMPO SUPLENCIA
                 datos_asistencia = {
                     'fecha': fecha_completa,
                     'fecha_turno': fecha_turno,
@@ -1375,7 +1408,8 @@ class SistemaEnfermeria:
                     'servicio': usuario['servicio'],
                     'turno_laboral': usuario['turno_laboral'],
                     'hora_entrada': hora_actual,
-                    'incidencias': "NO"
+                    'incidencias': "NO",
+                    'suplencia': usuario.get('suplencia', 'NO')  # NUEVO CAMPO: suplencia
                 }
                 
                 # Registrar en archivo remoto - CORREGIDO: Esta función ahora garantiza mover TODOS los registros anteriores
@@ -1395,6 +1429,7 @@ class SistemaEnfermeria:
                     <p><strong>Puesto:</strong> {resultado['PUESTO']}</p>
                     <p><strong>Servicio:</strong> {usuario['servicio']}</p>
                     <p><strong>Turno:</strong> {resultado['TURNO']}</p>
+                    <p><strong>Suplencia:</strong> {usuario.get('suplencia', 'NO')}</p>
                     <p><strong>Tipo de registro:</strong> {resultado['TIPO_REGISTRO']}</p>
                     <p><strong>Fecha:</strong> {resultado['FECHA']}</p>
                     <p><strong>Hora exacta:</strong> {resultado['HORA']}</p>
@@ -1416,7 +1451,8 @@ class SistemaEnfermeria:
                                 'fecha': ahora.strftime('%Y-%m-%d'),
                                 'hora_registro': ahora.strftime('%H:%M:%S'),
                                 'tipo_registro': tipo_registro,
-                                'incidencia': 'NO'
+                                'incidencia': 'NO',
+                                'suplencia': usuario.get('suplencia', 'NO')
                             }
                             
                             exito_correo, mensaje_correo = self.sistema_correo.enviar_correo_confirmacion(
@@ -1495,6 +1531,7 @@ class SistemaEnfermeria:
                 - El sistema guardará automáticamente en el archivo remoto
                 - Solo se conservará el registro más reciente en el archivo de asistencia
                 - Los registros anteriores se moverán al histórico
+                - El campo suplencia se mantendrá del registro original
                 """)
             
             st.markdown('</div>', unsafe_allow_html=True)
@@ -1529,7 +1566,8 @@ class SistemaEnfermeria:
                             'servicio': usuario['servicio'],
                             'turno_laboral': usuario['turno_laboral'],
                             'hora_entrada': "NO",  # CORREGIDO: Para incidencias debe ser "NO"
-                            'incidencias': codigo_incidencia
+                            'incidencias': codigo_incidencia,
+                            'suplencia': usuario.get('suplencia', 'NO')  # NUEVO CAMPO: suplencia
                         }
                         
                         # CORREGIDO: La función agregar_asistencia_remota ahora maneja automáticamente el histórico
@@ -1553,7 +1591,8 @@ class SistemaEnfermeria:
                                         'fecha': ahora.strftime('%Y-%m-%d'),
                                         'hora_registro': ahora.strftime('%H:%M:%S'),
                                         'tipo_registro': f"INCIDENCIA-{codigo_incidencia}",
-                                        'incidencia': f"{codigo_incidencia} - {descripcion_incidencia}"
+                                        'incidencia': f"{codigo_incidencia} - {descripcion_incidencia}",
+                                        'suplencia': usuario.get('suplencia', 'NO')
                                     }
                                     
                                     exito_correo, mensaje_correo = self.sistema_correo.enviar_correo_confirmacion(
@@ -1568,6 +1607,7 @@ class SistemaEnfermeria:
                             <p><strong>Puesto:</strong> {resultado['PUESTO']}</p>
                             <p><strong>Servicio:</strong> {usuario['servicio']}</p>
                             <p><strong>Turno:</strong> {resultado['TURNO']}</p>
+                            <p><strong>Suplencia:</strong> {usuario.get('suplencia', 'NO')}</p>
                             <p><strong>Tipo de registro:</strong> INCIDENCIA</p>
                             <p><strong>Código de incidencia:</strong> {codigo_incidencia}</p>
                             <p><strong>Descripción:</strong> {descripcion_incidencia}</p>
