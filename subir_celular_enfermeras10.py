@@ -271,7 +271,9 @@ class SistemaEnfermeria:
             "enfermera general C",
             "enfermera especialista",
             "ayudante general",
-            "camillero"
+            "camillero",
+            "jefatura servicio",
+            "supervision turno"
         ]
         
         self.TURNOS = [
