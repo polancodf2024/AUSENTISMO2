@@ -558,7 +558,7 @@ def guardar_archivo_asistencia(df):
         st.error("❌ Error al guardar el archivo de asistencia")
         return False
 
-def crear_registro_asistencia_manual(numero_economico, hora_entrada, incidencias):
+def crear_registro_asistencia_manual(numero_economico, hora_entrada, incidencias, fecha_personalizada=None, hora_personalizada=None):
     """Crea un registro manual en el archivo de asistencia con los datos específicos"""
     try:
         # Cargar archivo de asistencia
@@ -566,9 +566,15 @@ def crear_registro_asistencia_manual(numero_economico, hora_entrada, incidencias
         if df_asistencia is None:
             return False
 
-        # Obtener fecha actual
-        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M")
-        fecha_turno_actual = datetime.now().strftime("%Y-%m-%d")
+        # Determinar fechas según si se proporciona fecha personalizada
+        if fecha_personalizada and hora_personalizada:
+            # Combinar fecha y hora personalizadas
+            fecha_completa = f"{fecha_personalizada} {hora_personalizada}"
+            fecha_turno = fecha_personalizada
+        else:
+            # Usar fecha actual (comportamiento original)
+            fecha_completa = datetime.now().strftime("%Y-%m-%d %H:%M")
+            fecha_turno = datetime.now().strftime("%Y-%m-%d")
 
         # Cargar datos del usuario desde claves para obtener información completa
         df_claves = cargar_archivo_claves()
@@ -581,16 +587,16 @@ def crear_registro_asistencia_manual(numero_economico, hora_entrada, incidencias
 
         usuario = usuario_clave.iloc[0]
 
-        # Eliminar cualquier registro existente para este usuario en la fecha actual (evitar duplicados)
+        # Eliminar cualquier registro existente para este usuario en la fecha del turno (evitar duplicados)
         df_asistencia = df_asistencia[
             ~((df_asistencia['numero_economico'] == numero_economico) & 
-              (df_asistencia['fecha_turno'] == fecha_turno_actual))
+              (df_asistencia['fecha_turno'] == fecha_turno))
         ]
 
         # Crear nuevo registro de asistencia
         nuevo_registro_asistencia = {
-            'fecha': fecha_actual,
-            'fecha_turno': fecha_turno_actual,
+            'fecha': fecha_completa,
+            'fecha_turno': fecha_turno,
             'numero_economico': numero_economico,
             'puesto': usuario['puesto'],
             'nombre_completo': usuario['nombre_completo'],
@@ -611,7 +617,7 @@ def crear_registro_asistencia_manual(numero_economico, hora_entrada, incidencias
         st.error(f"Error creando registro de asistencia: {str(e)}")
         return False
 
-def actualizar_registro_asistencia_manual(numero_original, nuevo_numero, hora_entrada, incidencias):
+def actualizar_registro_asistencia_manual(numero_original, nuevo_numero, hora_entrada, incidencias, fecha_personalizada=None, hora_personalizada=None):
     """Actualiza el registro en asistencia con los nuevos datos"""
     try:
         # Cargar archivo de asistencia
@@ -619,9 +625,15 @@ def actualizar_registro_asistencia_manual(numero_original, nuevo_numero, hora_en
         if df_asistencia is None:
             return False
 
-        # Obtener fecha actual
-        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M")
-        fecha_turno_actual = datetime.now().strftime("%Y-%m-%d")
+        # Determinar fechas según si se proporciona fecha personalizada
+        if fecha_personalizada and hora_personalizada:
+            # Combinar fecha y hora personalizadas
+            fecha_completa = f"{fecha_personalizada} {hora_personalizada}"
+            fecha_turno = fecha_personalizada
+        else:
+            # Usar fecha actual (comportamiento original)
+            fecha_completa = datetime.now().strftime("%Y-%m-%d %H:%M")
+            fecha_turno = datetime.now().strftime("%Y-%m-%d")
 
         # Cargar datos del usuario actualizado desde claves
         df_claves = cargar_archivo_claves()
@@ -635,16 +647,16 @@ def actualizar_registro_asistencia_manual(numero_original, nuevo_numero, hora_en
         usuario = usuario_clave.iloc[0]
 
         # Buscar y eliminar registros existentes para evitar duplicados
-        mask_original = (df_asistencia['numero_economico'] == numero_original) & (df_asistencia['fecha_turno'] == fecha_turno_actual)
-        mask_nuevo = (df_asistencia['numero_economico'] == nuevo_numero) & (df_asistencia['fecha_turno'] == fecha_turno_actual)
+        mask_original = (df_asistencia['numero_economico'] == numero_original) & (df_asistencia['fecha_turno'] == fecha_turno)
+        mask_nuevo = (df_asistencia['numero_economico'] == nuevo_numero) & (df_asistencia['fecha_turno'] == fecha_turno)
         
         # Eliminar registros existentes
         df_asistencia = df_asistencia[~(mask_original | mask_nuevo)]
 
         # Crear nuevo registro
         nuevo_registro = {
-            'fecha': fecha_actual,
-            'fecha_turno': fecha_turno_actual,
+            'fecha': fecha_completa,
+            'fecha_turno': fecha_turno,
             'numero_economico': nuevo_numero,
             'puesto': usuario['puesto'],
             'nombre_completo': usuario['nombre_completo'],
@@ -664,7 +676,7 @@ def actualizar_registro_asistencia_manual(numero_original, nuevo_numero, hora_en
         st.error(f"Error actualizando registro de asistencia: {str(e)}")
         return False
 
-def sincronizar_baja_asistencia(numero_economico_eliminado):
+def sincronizar_baja_asistencia(numero_economico_eliminado, fecha_turno=None):
     """Sincroniza la baja de un usuario con el archivo de asistencia"""
     try:
         # Cargar archivo de asistencia existente
@@ -673,13 +685,14 @@ def sincronizar_baja_asistencia(numero_economico_eliminado):
         if df_asistencia is None:
             return False
             
-        # Obtener fecha actual para el turno
-        fecha_turno_actual = datetime.now().strftime("%Y-%m-%d")
+        # Determinar fecha del turno
+        if not fecha_turno:
+            fecha_turno = datetime.now().strftime("%Y-%m-%d")
         
-        # Eliminar registros del usuario en asistencia para la fecha actual
+        # Eliminar registros del usuario en asistencia para la fecha del turno
         df_asistencia_actualizado = df_asistencia[
             ~((df_asistencia['numero_economico'] == numero_economico_eliminado) & 
-              (df_asistencia['fecha_turno'] == fecha_turno_actual))
+              (df_asistencia['fecha_turno'] == fecha_turno))
         ]
         
         # Guardar archivo de asistencia actualizado
@@ -733,6 +746,29 @@ def mostrar_creacion_claves(user_info):
         col3, col4 = st.columns(2)
         
         with col3:
+            # Selector de fecha y hora personalizada
+            st.subheader("🗓️ Fecha y Hora del Registro")
+            fecha_personalizada = st.date_input(
+                "Fecha*",
+                value=datetime.now().date(),
+                key="fecha_personalizada_creacion"
+            )
+            
+            hora_personalizada = st.time_input(
+                "Hora*",
+                value=datetime.now().time(),
+                key="hora_personalizada_creacion"
+            )
+            
+            # Convertir a string en el formato requerido
+            fecha_str = fecha_personalizada.strftime("%Y-%m-%d")
+            hora_str = hora_personalizada.strftime("%H:%M")
+            fecha_completa_str = f"{fecha_str} {hora_str}"
+            
+            st.info(f"**Fecha completa:** {fecha_completa_str}")
+            st.info(f"**Fecha del turno:** {fecha_str}")
+            
+        with col4:
             hora_entrada = st.selectbox(
                 "Hora de Entrada*",
                 options=CONFIG.HORAS_ENTRADA,
@@ -740,94 +776,79 @@ def mostrar_creacion_claves(user_info):
                 key="hora_entrada_claves"
             )
             
-        with col4:
             # Crear opciones para incidencias
             opciones_incidencias = ["NO"] + [f"{codigo} - {descripcion}" for codigo, descripcion in CONFIG.INCIDENCIAS.items()]
             incidencia_seleccionada = st.selectbox(
                 "Incidencias*",
                 options=opciones_incidencias,
-                index=0,  # Por defecto "NO"
-                key="incidencias_claves"
+                key="incidencia_select_claves"
             )
             
-            # Procesar la selección de incidencias
-            if incidencia_seleccionada == "NO":
-                incidencia_final = "NO"
-            else:
-                incidencia_final = incidencia_seleccionada.split(" - ")[0]
+            # Extraer solo el código de la incidencia si se seleccionó algo diferente a "NO"
+            incidencia_codigo = "NO"
+            if incidencia_seleccionada != "NO":
+                incidencia_codigo = incidencia_seleccionada.split(" - ")[0]
 
-        submitted = st.form_submit_button("➕ Agregar Usuario", type="primary")
+        submitted = st.form_submit_button("✅ Crear Usuario y Registro de Asistencia")
 
         if submitted:
-            # Validar que todos los campos obligatorios estén llenos
-            campos_obligatorios = [
-                numero_economico.strip(),
-                puesto.strip(),
-                nombre_completo.strip(),
-                servicio.strip(),
-                password.strip(),
-                password_confirm.strip(),
-                turno_laboral.strip() if turno_laboral else "",
-                hora_entrada.strip() if hora_entrada else "",
-                incidencia_final.strip() if incidencia_final else ""
-            ]
-
-            # Verificar campos vacíos
-            campos_vacios = []
-            for i, campo in enumerate(campos_obligatorios):
-                if not campo:
-                    nombres_campos = [
-                        "Número Económico", "Puesto", "Nombre Completo", "Servicio", 
-                        "Contraseña", "Confirmar Contraseña", "Turno Laboral",
-                        "Hora de Entrada", "Incidencias"
-                    ]
-                    campos_vacios.append(nombres_campos[i])
-
-            if campos_vacios:
-                st.error(f"❌ Por favor complete todos los campos obligatorios (*). Faltante: {', '.join(campos_vacios)}")
-                if CONFIG.DEBUG_MODE:
-                    st.write("Valores de campos:", campos_obligatorios)
+            # Validaciones
+            if not all([numero_economico, nombre_completo, puesto, servicio, turno_laboral, password]):
+                st.error("❌ Por favor complete todos los campos obligatorios (*)")
                 return
 
-            # Verificar que las contraseñas coincidan
             if password != password_confirm:
                 st.error("❌ Las contraseñas no coinciden")
                 return
 
             # Verificar si el número económico ya existe
             if numero_economico in df['numero_economico'].values:
-                st.error(f"❌ El número económico {numero_economico} ya existe")
+                st.error("❌ El número económico ya existe")
                 return
 
-            # Agregar nuevo registro al archivo de claves
-            nuevo_registro = pd.DataFrame({
-                'numero_economico': [numero_economico.strip()],
-                'puesto': [puesto.strip()],
-                'nombre_completo': [nombre_completo.strip()],
-                'servicio': [servicio.strip()],
-                'turno_laboral': [turno_laboral.strip()],
-                'password': [password.strip()],
-                'correo_electronico': [correo_electronico.strip()],
-                'suplencia': [suplencia],
-                'numero_evento': [1],  # Valor fijo 1 según requerimiento
-                'numero_consecutivo': [1]  # Valor fijo 1 según requerimiento
-            })
+            # Sanitizar entradas
+            numero_economico = sanitize_input(numero_economico)
+            nombre_completo = sanitize_input(nombre_completo)
+            puesto = sanitize_input(puesto)
+            servicio = sanitize_input(servicio)
+            turno_laboral = sanitize_input(turno_laboral)
+            correo_electronico = sanitize_input(correo_electronico)
+            password = sanitize_input(password)
 
-            df = pd.concat([df, nuevo_registro], ignore_index=True)
+            # Crear nuevo registro para archivo de claves
+            nuevo_registro = {
+                'numero_economico': numero_economico,
+                'puesto': puesto,
+                'nombre_completo': nombre_completo,
+                'servicio': servicio,
+                'turno_laboral': turno_laboral,
+                'password': password,
+                'correo_electronico': correo_electronico,
+                'suplencia': suplencia,
+                'numero_evento': 1,
+                'numero_consecutivo': 1
+            }
 
+            # Agregar a DataFrame
+            df = pd.concat([df, pd.DataFrame([nuevo_registro])], ignore_index=True)
+
+            # Guardar archivo de claves
             if guardar_archivo_claves(df):
-                # Ahora crear el registro en asistencia con los datos específicos
-                if crear_registro_asistencia_manual(numero_economico.strip(), hora_entrada, incidencia_final):
-                    st.success("✅ Usuario agregado correctamente al archivo de claves y asistencia")
+                st.success("✅ Usuario creado exitosamente en archivo de claves")
+
+                # Crear registro en archivo de asistencia
+                if crear_registro_asistencia_manual(numero_economico, hora_entrada, incidencia_codigo, fecha_str, hora_str):
+                    st.success("✅ Registro de asistencia creado exitosamente")
                 else:
-                    st.success("✅ Usuario agregado al archivo de claves, pero hubo un error en la asistencia")
+                    st.warning("⚠️ Usuario creado pero hubo un error al crear el registro de asistencia")
+
                 st.rerun()
             else:
-                st.error("❌ Error al guardar los datos")
+                st.error("❌ Error al guardar el usuario")
 
-def mostrar_modificacion_claves(user_info):
-    """Muestra la interfaz para modificación de registros en archivo de claves"""
-    st.header("✏️ Modificación de Usuarios en Archivo de Claves")
+def mostrar_edicion_claves(user_info):
+    """Muestra la interfaz para edición de registros en archivo de claves"""
+    st.header("✏️ Edición de Usuarios en Archivo de Claves")
 
     # Cargar datos existentes
     df = cargar_archivo_claves()
@@ -836,213 +857,370 @@ def mostrar_modificacion_claves(user_info):
         return
 
     if df.empty:
-        st.info("No hay usuarios registrados para modificar")
+        st.info("No hay usuarios registrados")
         return
 
-    # Seleccionar usuario a modificar
-    usuarios_options = [f"{row['numero_economico']} - {row['nombre_completo']} - {row['puesto']}"
-                       for _, row in df.iterrows()]
+    # Selector de usuario a editar
+    usuarios_opciones = [f"{row['numero_economico']} - {row['nombre_completo']}" for _, row in df.iterrows()]
+    
+    # Usar session_state para mantener la selección del usuario
+    if 'usuario_editar_seleccionado' not in st.session_state:
+        st.session_state.usuario_editar_seleccionado = usuarios_opciones[0] if usuarios_opciones else None
 
     usuario_seleccionado = st.selectbox(
-        "Seleccione el usuario a modificar:",
-        options=usuarios_options,
-        key="modificacion_select_claves"
+        "Seleccione usuario a editar:", 
+        usuarios_opciones, 
+        key="usuario_editar",
+        index=usuarios_opciones.index(st.session_state.usuario_editar_seleccionado) if st.session_state.usuario_editar_seleccionado in usuarios_opciones else 0
     )
 
-    numero_economico_seleccionado = usuario_seleccionado.split(" - ")[0].strip()
+    # Actualizar session_state cuando cambia la selección
+    if usuario_seleccionado != st.session_state.get('usuario_editar_seleccionado'):
+        st.session_state.usuario_editar_seleccionado = usuario_seleccionado
+        st.rerun()
 
-    # Verificar si el registro existe antes de acceder
-    registro_filtrado = df[df['numero_economico'] == numero_economico_seleccionado]
+    if usuario_seleccionado:
+        numero_economico_original = usuario_seleccionado.split(" - ")[0]
+        usuario_data = df[df['numero_economico'] == numero_economico_original].iloc[0]
 
-    if registro_filtrado.empty:
-        st.error("❌ Error: El usuario seleccionado no existe en los registros")
+        # Mostrar información actual del usuario
+        st.subheader("👤 Información Actual del Usuario")
+        col_info1, col_info2 = st.columns(2)
+        with col_info1:
+            st.info(f"**Número Económico:** {usuario_data['numero_economico']}")
+            st.info(f"**Nombre:** {usuario_data['nombre_completo']}")
+            st.info(f"**Puesto:** {usuario_data['puesto']}")
+        with col_info2:
+            st.info(f"**Servicio:** {usuario_data['servicio']}")
+            st.info(f"**Turno:** {usuario_data['turno_laboral']}")
+            st.info(f"**Suplencia:** {usuario_data['suplencia']}")
+
+        with st.form("form_edicion_claves"):
+            st.subheader("✏️ Modificar Datos del Usuario")
+            
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # Encontrar índices actuales para los selectboxes
+                puesto_index = CONFIG.PUESTOS.index(usuario_data['puesto']) if usuario_data['puesto'] in CONFIG.PUESTOS else 0
+                servicio_index = CONFIG.SERVICIOS.index(usuario_data['servicio']) if usuario_data['servicio'] in CONFIG.SERVICIOS else 0
+                turno_index = CONFIG.TURNOS.index(usuario_data['turno_laboral']) if usuario_data['turno_laboral'] in CONFIG.TURNOS else 0
+                suplencia_index = CONFIG.SUPLENCIA_OPCIONES.index(usuario_data['suplencia']) if usuario_data['suplencia'] in CONFIG.SUPLENCIA_OPCIONES else 1
+
+                nuevo_numero_economico = st.text_input(
+                    "Número Económico*",
+                    value=usuario_data['numero_economico'],
+                    max_chars=10,
+                    key="num_economico_edit"
+                )
+                nuevo_puesto = st.selectbox(
+                    "Puesto*",
+                    options=CONFIG.PUESTOS,
+                    index=puesto_index,
+                    key="puesto_select_edit"
+                )
+                nuevo_servicio = st.selectbox(
+                    "Servicio*",
+                    options=CONFIG.SERVICIOS,
+                    index=servicio_index,
+                    key="servicio_select_edit"
+                )
+                nuevo_turno_laboral = st.selectbox(
+                    "🕒 Turno laboral*",
+                    options=CONFIG.TURNOS,
+                    index=turno_index,
+                    key="turno_select_edit"
+                )
+
+            with col2:
+                nuevo_nombre_completo = st.text_input(
+                    "Nombre Completo*",
+                    value=usuario_data['nombre_completo'],
+                    key="nombre_completo_edit"
+                )
+                nuevo_correo_electronico = st.text_input(
+                    "Correo Electrónico",
+                    value=usuario_data.get('correo_electronico', ''),
+                    key="correo_edit"
+                )
+                nueva_suplencia = st.selectbox(
+                    "Suplencia*",
+                    options=CONFIG.SUPLENCIA_OPCIONES,
+                    index=suplencia_index,
+                    key="suplencia_select_edit"
+                )
+                nueva_password = st.text_input(
+                    "Nueva Contraseña (dejar vacío para mantener actual)",
+                    type="password",
+                    key="password_edit"
+                )
+                confirmar_password = st.text_input(
+                    "Confirmar Nueva Contraseña",
+                    type="password",
+                    key="password_confirm_edit"
+                )
+
+            # Campos adicionales para asistencia
+            st.markdown("---")
+            st.subheader("📋 Actualización de Datos de Asistencia")
+            
+            col3, col4 = st.columns(2)
+            
+            with col3:
+                # Selector de fecha y hora personalizada
+                st.subheader("🗓️ Fecha y Hora del Registro")
+                fecha_personalizada = st.date_input(
+                    "Fecha*",
+                    value=datetime.now().date(),
+                    key="fecha_personalizada_edicion"
+                )
+                
+                hora_personalizada = st.time_input(
+                    "Hora*",
+                    value=datetime.now().time(),
+                    key="hora_personalizada_edicion"
+                )
+                
+                # Convertir a string en el formato requerido
+                fecha_str = fecha_personalizada.strftime("%Y-%m-%d")
+                hora_str = hora_personalizada.strftime("%H:%M")
+                fecha_completa_str = f"{fecha_str} {hora_str}"
+                
+                st.info(f"**Fecha completa:** {fecha_completa_str}")
+                st.info(f"**Fecha del turno:** {fecha_str}")
+                
+            with col4:
+                # Cargar datos actuales de asistencia para este usuario
+                df_asistencia = cargar_archivo_asistencia()
+                hora_entrada_actual = "NO"
+                incidencia_actual = "NO"
+                
+                if df_asistencia is not None and not df_asistencia.empty:
+                    registro_asistencia = df_asistencia[
+                        (df_asistencia['numero_economico'] == numero_economico_original) & 
+                        (df_asistencia['fecha_turno'] == fecha_str)
+                    ]
+                    if not registro_asistencia.empty:
+                        registro = registro_asistencia.iloc[0]
+                        hora_entrada_actual = registro['hora_entrada'] if pd.notna(registro['hora_entrada']) and registro['hora_entrada'] != '' else "NO"
+                        incidencia_actual = registro['incidencias'] if pd.notna(registro['incidencias']) and registro['incidencias'] != '' else "NO"
+                
+                # Encontrar índice actual para hora_entrada
+                hora_entrada_index = 0
+                if hora_entrada_actual in CONFIG.HORAS_ENTRADA:
+                    hora_entrada_index = CONFIG.HORAS_ENTRADA.index(hora_entrada_actual)
+                
+                nueva_hora_entrada = st.selectbox(
+                    "Hora de Entrada*",
+                    options=CONFIG.HORAS_ENTRADA,
+                    index=hora_entrada_index,
+                    key="hora_entrada_edit"
+                )
+                
+                # Crear opciones para incidencias
+                opciones_incidencias = ["NO"] + [f"{codigo} - {descripcion}" for codigo, descripcion in CONFIG.INCIDENCIAS.items()]
+                
+                # Encontrar índice actual para incidencias
+                incidencia_index = 0
+                if incidencia_actual != "NO":
+                    # Buscar la incidencia actual en las opciones
+                    for i, opcion in enumerate(opciones_incidencias):
+                        if opcion.startswith(incidencia_actual):
+                            incidencia_index = i
+                            break
+                
+                nueva_incidencia_seleccionada = st.selectbox(
+                    "Incidencias*",
+                    options=opciones_incidencias,
+                    index=incidencia_index,
+                    key="incidencia_select_edit"
+                )
+                
+                # Extraer solo el código de la incidencia si se seleccionó algo diferente a "NO"
+                nueva_incidencia_codigo = "NO"
+                if nueva_incidencia_seleccionada != "NO":
+                    nueva_incidencia_codigo = nueva_incidencia_seleccionada.split(" - ")[0]
+
+            submitted = st.form_submit_button("✅ Actualizar Usuario y Registro de Asistencia")
+
+            if submitted:
+                # Validaciones
+                if not all([nuevo_numero_economico, nuevo_nombre_completo, nuevo_puesto, nuevo_servicio, nuevo_turno_laboral]):
+                    st.error("❌ Por favor complete todos los campos obligatorios (*)")
+                    return
+
+                if nueva_password and nueva_password != confirmar_password:
+                    st.error("❌ Las contraseñas no coinciden")
+                    return
+
+                # Verificar si el nuevo número económico ya existe (si se cambió)
+                if (nuevo_numero_economico != numero_economico_original and 
+                    nuevo_numero_economico in df['numero_economico'].values):
+                    st.error("❌ El nuevo número económico ya existe")
+                    return
+
+                # Sanitizar entradas
+                nuevo_numero_economico = sanitize_input(nuevo_numero_economico)
+                nuevo_nombre_completo = sanitize_input(nuevo_nombre_completo)
+                nuevo_puesto = sanitize_input(nuevo_puesto)
+                nuevo_servicio = sanitize_input(nuevo_servicio)
+                nuevo_turno_laboral = sanitize_input(nuevo_turno_laboral)
+                nuevo_correo_electronico = sanitize_input(nuevo_correo_electronico)
+
+                # Actualizar datos en DataFrame
+                mask = df['numero_economico'] == numero_economico_original
+                df.loc[mask, 'numero_economico'] = nuevo_numero_economico
+                df.loc[mask, 'nombre_completo'] = nuevo_nombre_completo
+                df.loc[mask, 'puesto'] = nuevo_puesto
+                df.loc[mask, 'servicio'] = nuevo_servicio
+                df.loc[mask, 'turno_laboral'] = nuevo_turno_laboral
+                df.loc[mask, 'correo_electronico'] = nuevo_correo_electronico
+                df.loc[mask, 'suplencia'] = nueva_suplencia
+
+                # Actualizar contraseña si se proporcionó una nueva
+                if nueva_password:
+                    df.loc[mask, 'password'] = nueva_password
+
+                # Guardar archivo de claves
+                if guardar_archivo_claves(df):
+                    st.success("✅ Usuario actualizado exitosamente en archivo de claves")
+
+                    # Actualizar registro en archivo de asistencia
+                    if actualizar_registro_asistencia_manual(
+                        numero_economico_original, 
+                        nuevo_numero_economico, 
+                        nueva_hora_entrada, 
+                        nueva_incidencia_codigo,
+                        fecha_str,
+                        hora_str
+                    ):
+                        st.success("✅ Registro de asistencia actualizado exitosamente")
+                    else:
+                        st.warning("⚠️ Usuario actualizado pero hubo un error al actualizar el registro de asistencia")
+
+                    # Limpiar selección para forzar recarga
+                    if 'usuario_editar_seleccionado' in st.session_state:
+                        del st.session_state.usuario_editar_seleccionado
+                    st.rerun()
+                else:
+                    st.error("❌ Error al actualizar el usuario")
+
+def mostrar_eliminacion_claves(user_info):
+    """Muestra la interfaz para eliminación de registros en archivo de claves"""
+    st.header("🗑️ Eliminación de Usuarios en Archivo de Claves")
+
+    # Cargar datos existentes
+    df = cargar_archivo_claves()
+    if df is None:
+        st.error("No se pudieron cargar los datos existentes")
         return
 
-    registro_original = registro_filtrado.iloc[0]
+    if df.empty:
+        st.info("No hay usuarios registrados")
+        return
 
-    # Cargar datos de asistencia para este usuario
-    df_asistencia = cargar_archivo_asistencia()
-    fecha_turno_actual = datetime.now().strftime("%Y-%m-%d")
+    # Selector de usuario a eliminar
+    usuarios_opciones = [f"{row['numero_economico']} - {row['nombre_completo']}" for _, row in df.iterrows()]
     
-    registro_asistencia = df_asistencia[
-        (df_asistencia['numero_economico'] == numero_economico_seleccionado) &
-        (df_asistencia['fecha_turno'] == fecha_turno_actual)
-    ]
-    
-    # Valores por defecto para asistencia
-    hora_entrada_actual = "NO"
-    incidencias_actual = "NO"
-    
-    if not registro_asistencia.empty:
-        registro = registro_asistencia.iloc[0]
-        hora_entrada_actual = registro['hora_entrada'] if pd.notna(registro['hora_entrada']) and registro['hora_entrada'] != '' else "NO"
-        incidencias_actual = registro['incidencias'] if pd.notna(registro['incidencias']) and registro['incidencias'] != '' else "NO"
+    # Usar session_state para mantener la selección del usuario
+    if 'usuario_eliminar_seleccionado' not in st.session_state:
+        st.session_state.usuario_eliminar_seleccionado = usuarios_opciones[0] if usuarios_opciones else None
 
-    # Crear sufijo único basado en el número económico para las claves
-    key_suffix = f"_{numero_economico_seleccionado}_claves"
+    usuario_seleccionado = st.selectbox(
+        "Seleccione usuario a eliminar:", 
+        usuarios_opciones, 
+        key="usuario_eliminar",
+        index=usuarios_opciones.index(st.session_state.usuario_eliminar_seleccionado) if st.session_state.usuario_eliminar_seleccionado in usuarios_opciones else 0
+    )
 
-    with st.form("form_modificacion_claves"):
+    # Actualizar session_state cuando cambia la selección
+    if usuario_seleccionado != st.session_state.get('usuario_eliminar_seleccionado'):
+        st.session_state.usuario_eliminar_seleccionado = usuario_seleccionado
+        st.rerun()
+
+    if usuario_seleccionado:
+        numero_economico_eliminar = usuario_seleccionado.split(" - ")[0]
+        usuario_data = df[df['numero_economico'] == numero_economico_eliminar].iloc[0]
+
+        # Mostrar información del usuario
+        st.warning(f"⚠️ Está a punto de eliminar al siguiente usuario:")
         col1, col2 = st.columns(2)
-
         with col1:
-            nuevo_numero = st.text_input("Número Económico*",
-                                       value=str(registro_original['numero_economico']),
-                                       max_chars=10,
-                                       key=f"mod_numero{key_suffix}")
-
-            nuevo_puesto = st.selectbox(
-                "Puesto*",
-                options=CONFIG.PUESTOS,
-                index=CONFIG.PUESTOS.index(registro_original['puesto']) if registro_original['puesto'] in CONFIG.PUESTOS else 0,
-                key=f"mod_puesto{key_suffix}"
-            )
-
-            nuevo_servicio = st.selectbox(
-                "Servicio*",
-                options=CONFIG.SERVICIOS,
-                index=CONFIG.SERVICIOS.index(registro_original['servicio']) if 'servicio' in registro_original and registro_original['servicio'] in CONFIG.SERVICIOS else 0,
-                key=f"mod_servicio{key_suffix}"
-            )
-
-            nuevo_turno = st.selectbox(
-                "🕒 Turno laboral*",
-                options=CONFIG.TURNOS,
-                index=CONFIG.TURNOS.index(registro_original['turno_laboral']) if registro_original['turno_laboral'] in CONFIG.TURNOS else 0,
-                key=f"mod_turno{key_suffix}"
-            )
-
+            st.write(f"**Número Económico:** {usuario_data['numero_economico']}")
+            st.write(f"**Nombre:** {usuario_data['nombre_completo']}")
+            st.write(f"**Puesto:** {usuario_data['puesto']}")
         with col2:
-            nuevo_nombre = st.text_input("Nombre Completo*",
-                                       value=registro_original['nombre_completo'],
-                                       key=f"mod_nombre{key_suffix}")
-
-            nuevo_correo = st.text_input("Correo Electrónico",
-                                       value=registro_original.get('correo_electronico', ''),
-                                       key=f"mod_correo{key_suffix}")
-
-            nueva_suplencia = st.selectbox(
-                "Suplencia*",
-                options=CONFIG.SUPLENCIA_OPCIONES,
-                index=CONFIG.SUPLENCIA_OPCIONES.index(registro_original['suplencia']) if 'suplencia' in registro_original and registro_original['suplencia'] in CONFIG.SUPLENCIA_OPCIONES else 1,
-                key=f"mod_suplencia{key_suffix}"
-            )
-
-            nuevo_password = st.text_input("Nueva Contraseña (dejar vacío para mantener actual)",
-                                         type="password",
-                                         key=f"mod_password{key_suffix}")
-
-            confirm_password = st.text_input("Confirmar Nueva Contraseña",
-                                           type="password",
-                                           key=f"mod_confirm_password{key_suffix}")
+            st.write(f"**Servicio:** {usuario_data['servicio']}")
+            st.write(f"**Turno:** {usuario_data['turno_laboral']}")
+            st.write(f"**Suplencia:** {usuario_data['suplencia']}")
 
         # Campos adicionales para asistencia
         st.markdown("---")
-        st.subheader("📋 Datos de Asistencia")
+        st.subheader("📋 Eliminación de Registro de Asistencia")
         
         col3, col4 = st.columns(2)
         
         with col3:
-            # Encontrar índice actual para hora_entrada
-            hora_entrada_index = 0
-            if hora_entrada_actual in CONFIG.HORAS_ENTRADA:
-                hora_entrada_index = CONFIG.HORAS_ENTRADA.index(hora_entrada_actual)
-            
-            nueva_hora_entrada = st.selectbox(
-                "Hora de Entrada*",
-                options=CONFIG.HORAS_ENTRADA,
-                index=hora_entrada_index,
-                key=f"mod_hora_entrada{key_suffix}"
+            # Selector de fecha para eliminar registro de asistencia
+            fecha_eliminacion = st.date_input(
+                "Fecha del turno a eliminar*",
+                value=datetime.now().date(),
+                key="fecha_eliminacion_asistencia"
             )
+            fecha_turno_str = fecha_eliminacion.strftime("%Y-%m-%d")
+            st.info(f"**Fecha del turno:** {fecha_turno_str}")
             
         with col4:
-            # Crear opciones para incidencias
-            opciones_incidencias = ["NO"] + [f"{codigo} - {descripcion}" for codigo, descripcion in CONFIG.INCIDENCIAS.items()]
-            
-            # Encontrar índice actual para incidencias
-            incidencia_index = 0
-            if incidencias_actual != "NO":
-                # Buscar la incidencia actual en las opciones
-                for i, opcion in enumerate(opciones_incidencias):
-                    if opcion.startswith(incidencias_actual):
-                        incidencia_index = i
-                        break
-            
-            nueva_incidencia_seleccionada = st.selectbox(
-                "Incidencias*",
-                options=opciones_incidencias,
-                index=incidencia_index,
-                key=f"mod_incidencias{key_suffix}"
-            )
-            
-            # Procesar la selección de incidencias
-            if nueva_incidencia_seleccionada == "NO":
-                nueva_incidencia_final = "NO"
-            else:
-                nueva_incidencia_final = nueva_incidencia_seleccionada.split(" - ")[0]
-
-        submitted = st.form_submit_button("💾 Guardar Cambios")
-
-        if submitted:
-            if not all([nuevo_numero, nuevo_puesto, nuevo_nombre, nuevo_servicio, nuevo_turno, nueva_hora_entrada, nueva_incidencia_final]):
-                st.error("Por favor complete todos los campos obligatorios (*)")
-            else:
-                # Limpiar los valores
-                nuevo_numero = nuevo_numero.strip()
-                nuevo_nombre = nuevo_nombre.strip()
-                nuevo_puesto = nuevo_puesto.strip()
-                nuevo_servicio = nuevo_servicio.strip()
-                nuevo_turno = nuevo_turno.strip()
-                nuevo_correo = nuevo_correo.strip()
-
-                # Verificar si el nuevo número económico ya existe (y no es el mismo)
-                if (nuevo_numero != numero_economico_seleccionado and
-                    any(df['numero_economico'] == nuevo_numero)):
-                    st.error(f"El número económico {nuevo_numero} ya existe")
-                    return
-
-                # Verificar contraseñas si se proporcionaron
-                if nuevo_password:
-                    if nuevo_password != confirm_password:
-                        st.error("❌ Las contraseñas no coinciden")
-                        return
-                    password_final = nuevo_password
+            # Mostrar información del registro de asistencia que se eliminará
+            df_asistencia = cargar_archivo_asistencia()
+            if df_asistencia is not None and not df_asistencia.empty:
+                registro_asistencia = df_asistencia[
+                    (df_asistencia['numero_economico'] == numero_economico_eliminar) & 
+                    (df_asistencia['fecha_turno'] == fecha_turno_str)
+                ]
+                if not registro_asistencia.empty:
+                    st.warning("Se eliminará el siguiente registro de asistencia:")
+                    st.write(f"**Hora de entrada:** {registro_asistencia.iloc[0]['hora_entrada']}")
+                    st.write(f"**Incidencias:** {registro_asistencia.iloc[0]['incidencias']}")
                 else:
-                    # Mantener la contraseña actual
-                    password_final = registro_original['password']
+                    st.info("No hay registro de asistencia para esta fecha")
+            else:
+                st.info("No hay registros de asistencia")
 
-                # Cargar el archivo completo para modificar
-                df_completo = cargar_archivo_claves()
-                if df_completo is None:
-                    st.error("Error al cargar datos completos")
-                    return
+        # Confirmación de eliminación
+        confirmacion = st.checkbox("✅ Confirmo que deseo eliminar este usuario y su registro de asistencia", key="confirm_eliminar")
 
-                # Actualizar registro en claves
-                mask = df_completo['numero_economico'] == numero_economico_seleccionado
-                df_completo.loc[mask, 'numero_economico'] = nuevo_numero
-                df_completo.loc[mask, 'nombre_completo'] = nuevo_nombre
-                df_completo.loc[mask, 'puesto'] = nuevo_puesto
-                df_completo.loc[mask, 'servicio'] = nuevo_servicio
-                df_completo.loc[mask, 'turno_laboral'] = nuevo_turno
-                df_completo.loc[mask, 'password'] = password_final
-                df_completo.loc[mask, 'correo_electronico'] = nuevo_correo
-                df_completo.loc[mask, 'suplencia'] = nueva_suplencia
-                # Mantener los valores de numero_consecutivo y numero_evento
-                df_completo.loc[mask, 'numero_consecutivo'] = registro_original['numero_consecutivo']
-                df_completo.loc[mask, 'numero_evento'] = registro_original['numero_evento']
+        if st.button("🗑️ Eliminar Usuario y Registro de Asistencia", type="secondary"):
+            if not confirmacion:
+                st.error("❌ Debe confirmar la eliminación")
+                return
 
-                if guardar_archivo_claves(df_completo):
-                    # Actualizar registro en asistencia
-                    if actualizar_registro_asistencia_manual(numero_economico_seleccionado, nuevo_numero, nueva_hora_entrada, nueva_incidencia_final):
-                        st.success("✅ Cambios guardados correctamente y sincronizados con asistencia")
+            try:
+                # Eliminar usuario del archivo de claves
+                df_actualizado = df[df['numero_economico'] != numero_economico_eliminar]
+
+                if guardar_archivo_claves(df_actualizado):
+                    st.success("✅ Usuario eliminado exitosamente del archivo de claves")
+
+                    # Sincronizar eliminación con archivo de asistencia
+                    if sincronizar_baja_asistencia(numero_economico_eliminar, fecha_turno_str):
+                        st.success("✅ Registro de asistencia eliminado exitosamente")
                     else:
-                        st.success("✅ Cambios guardados en claves, pero hubo un error en la asistencia")
+                        st.warning("⚠️ Usuario eliminado pero hubo un error al eliminar el registro de asistencia")
+
+                    # Limpiar selección para forzar recarga
+                    if 'usuario_eliminar_seleccionado' in st.session_state:
+                        del st.session_state.usuario_eliminar_seleccionado
                     st.rerun()
                 else:
-                    st.error("❌ Error al guardar los cambios")
+                    st.error("❌ Error al eliminar el usuario")
 
-def mostrar_baja_claves(user_info):
-    """Muestra la interfaz para baja de registros en archivo de claves"""
-    st.header("🗑️ Baja de Usuarios en Archivo de Claves")
+            except Exception as e:
+                st.error(f"❌ Error durante la eliminación: {str(e)}")
+
+def mostrar_consulta_claves(user_info):
+    """Muestra la interfaz para consulta de registros en archivo de claves"""
+    st.header("🔍 Consulta de Archivo de Claves")
 
     # Cargar datos existentes
     df = cargar_archivo_claves()
@@ -1051,368 +1229,226 @@ def mostrar_baja_claves(user_info):
         return
 
     if df.empty:
-        st.info("No hay usuarios registrados para dar de baja")
+        st.info("No hay usuarios registrados")
         return
 
-    # Seleccionar usuario a eliminar
-    usuarios_options = [f"{row['numero_economico']} - {row['nombre_completo']} - {row['puesto']}"
-                       for _, row in df.iterrows()]
-
-    if not usuarios_options:
-        st.info("No hay usuarios disponibles para eliminar")
-        return
-
-    usuario_seleccionado = st.selectbox(
-        "Seleccione el usuario a eliminar:",
-        options=usuarios_options,
-        key="baja_select_claves"
-    )
-
-    numero_economico_seleccionado = usuario_seleccionado.split(" - ")[0].strip()
-    puesto_seleccionado = usuario_seleccionado.split(" - ")[2].strip()
-
-    # Verificar si el registro existe
-    registro_filtrado = df[df['numero_economico'] == numero_economico_seleccionado]
-    if registro_filtrado.empty:
-        st.error("❌ Error: El usuario seleccionado no existe en los registros")
-        return
-
-    registro = registro_filtrado.iloc[0]
-
-    # Mostrar información del usuario seleccionado
-    st.info(f"""
-    **Información del usuario seleccionado:**
-    - **Número Económico:** {registro['numero_economico']}
-    - **Nombre:** {registro['nombre_completo']}
-    - **Puesto:** {registro['puesto']}
-    - **Servicio:** {registro.get('servicio', 'No especificado')}
-    - **Turno Laboral:** {registro['turno_laboral']}
-    - **Correo Electrónico:** {registro.get('correo_electronico', 'No especificado')}
-    - **Suplencia:** {registro.get('suplencia', 'NO')}
-    - **N° Consecutivo:** {registro['numero_consecutivo']}
-    - **N° Evento:** {registro['numero_evento']}
-    """)
-
-    # Advertencia especial para no eliminarse a sí mismo
-    if numero_economico_seleccionado == user_info['numero_economico']:
-        st.error("⚠️ **ADVERTENCIA CRÍTICA:** No puede eliminarse a sí mismo del sistema")
-
-    # Confirmación explícita antes de eliminar
-    confirmacion = st.checkbox("⚠️ Confirmo que deseo eliminar permanentemente este usuario", key="confirmacion_baja_claves")
-
-    if st.button("❌ Eliminar Usuario", type="primary", key="baja_button_claves", disabled=not confirmacion):
-        if not confirmacion:
-            st.error("Debe confirmar la eliminación primero")
-            return
-
-        # Prevenir auto-eliminación
-        if numero_economico_seleccionado == user_info['numero_economico']:
-            st.error("❌ No puede eliminarse a sí mismo del sistema")
-            return
-
-        # Cargar el archivo completo para eliminar
-        df_completo = cargar_archivo_claves()
-        if df_completo is None:
-            st.error("Error al cargar datos completos")
-            return
-
-        # Eliminar registro del archivo de claves
-        df_claves_actualizado = df_completo[df_completo['numero_economico'] != numero_economico_seleccionado]
-
-        # Guardar archivo de claves actualizado
-        if guardar_archivo_claves(df_claves_actualizado):
-            # Sincronizar baja con archivo de asistencia
-            if sincronizar_baja_asistencia(numero_economico_seleccionado):
-                st.success("✅ Usuario eliminado correctamente del archivo de claves y asistencia")
-            else:
-                st.success("✅ Usuario eliminado del archivo de claves, pero hubo un error en la sincronización con asistencia")
-            st.rerun()
-        else:
-            st.error("❌ Error al eliminar el usuario del archivo de claves")
-
-def mostrar_consulta_claves(user_info):
-    """Muestra la interfaz para consulta de registros en archivo de claves"""
-    st.header("👥 Consulta de Usuarios en Archivo de Claves")
-
-    # Cargar datos existentes
-    df = cargar_archivo_claves()
-    if df is None:
-        st.error("No se pudieron cargar los datos del archivo de claves")
-        return
-
-    if df.empty:
-        st.info("No hay usuarios registrados en el archivo de claves")
-        return
-
-    st.write(f"**Total de usuarios registrados:** {len(df)}")
-
-    # Filtros
+    # Filtros de búsqueda
     col1, col2, col3 = st.columns(3)
     with col1:
-        filtro_puesto = st.selectbox(
-            "Filtrar por puesto:",
-            options=["Todos"] + sorted(df['puesto'].unique()),
-            key="filtro_puesto_claves"
-        )
+        filtro_numero = st.text_input("Filtrar por número económico", key="filtro_numero")
     with col2:
-        filtro_turno = st.selectbox(
-            "Filtrar por turno:",
-            options=["Todos"] + sorted(df['turno_laboral'].unique()),
-            key="filtro_turno_claves"
-        )
+        filtro_nombre = st.text_input("Filtrar por nombre", key="filtro_nombre")
     with col3:
-        filtro_suplencia = st.selectbox(
-            "Filtrar por suplencia:",
-            options=["Todos"] + sorted(df['suplencia'].unique()),
-            key="filtro_suplencia_claves"
+        filtro_servicio = st.selectbox(
+            "Filtrar por servicio",
+            options=["Todos"] + CONFIG.SERVICIOS,
+            key="filtro_servicio"
         )
-
-    # Búsqueda por número económico o nombre
-    busqueda = st.text_input("Buscar (número o nombre):", key="busqueda_claves")
 
     # Aplicar filtros
     df_filtrado = df.copy()
-    
-    if filtro_puesto != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['puesto'] == filtro_puesto]
-    
-    if filtro_turno != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['turno_laboral'] == filtro_turno]
-    
-    if filtro_suplencia != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['suplencia'] == filtro_suplencia]
-    
-    if busqueda:
-        busqueda_lower = busqueda.lower()
-        mask = (df_filtrado['numero_economico'].str.lower().str.contains(busqueda_lower)) | \
-               (df_filtrado['nombre_completo'].str.lower().str.contains(busqueda_lower))
-        df_filtrado = df_filtrado[mask]
+    if filtro_numero:
+        df_filtrado = df_filtrado[df_filtrado['numero_economico'].str.contains(filtro_numero, case=False, na=False)]
+    if filtro_nombre:
+        df_filtrado = df_filtrado[df_filtrado['nombre_completo'].str.contains(filtro_nombre, case=False, na=False)]
+    if filtro_servicio != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['servicio'] == filtro_servicio]
 
-    if df_filtrado.empty:
-        st.info("No hay usuarios que coincidan con los filtros aplicados")
-        return
+    # Mostrar resultados
+    st.subheader(f"📊 Resultados ({len(df_filtrado)} usuarios)")
 
-    st.write(f"**Usuarios encontrados:** {len(df_filtrado)}")
-
-    # Mostrar estadísticas
     if not df_filtrado.empty:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total usuarios filtrados", len(df_filtrado))
-        with col2:
-            puestos_unicos = df_filtrado['puesto'].nunique()
-            st.metric("Puestos diferentes", puestos_unicos)
-        with col3:
-            turnos_unicos = df_filtrado['turno_laboral'].nunique()
-            st.metric("Turnos diferentes", turnos_unicos)
-        with col4:
-            suplencias_count = df_filtrado['suplencia'].value_counts()
-            suplencia_mas_comun = suplencias_count.index[0] if not suplencias_count.empty else "N/A"
-            st.metric("Suplencia más común", suplencia_mas_comun)
+        # Seleccionar columnas a mostrar (excluir contraseña)
+        columnas_mostrar = ['numero_economico', 'nombre_completo', 'puesto', 'servicio', 'turno_laboral', 'suplencia']
+        if 'correo_electronico' in df_filtrado.columns:
+            columnas_mostrar.append('correo_electronico')
 
-    # Mostrar tabla de datos (ocultando contraseñas por seguridad)
-    columnas_a_mostrar = ['numero_economico', 'nombre_completo', 'puesto', 'servicio', 'turno_laboral', 'correo_electronico', 'suplencia', 'numero_consecutivo', 'numero_evento']
-    df_display = df_filtrado[columnas_a_mostrar] if all(col in df_filtrado.columns for col in columnas_a_mostrar) else df_filtrado
+        df_mostrar = df_filtrado[columnas_mostrar]
 
-    st.dataframe(
-        df_display,
-        column_config={
-            "numero_economico": "Número Económico",
-            "nombre_completo": "Nombre Completo",
-            "puesto": "Puesto",
-            "servicio": "Servicio",
-            "turno_laboral": "Turno Laboral",
-            "correo_electronico": "Correo Electrónico",
-            "suplencia": "Suplencia",
-            "numero_consecutivo": "N° Consecutivo",
-            "numero_evento": "N° Evento"
-        },
-        hide_index=True,
-        use_container_width=True
-    )
+        # Formatear datos para mejor visualización
+        df_mostrar['puesto'] = df_mostrar['puesto'].str.title()
+        df_mostrar['suplencia'] = df_mostrar['suplencia'].str.upper()
 
-def mostrar_impresion_claves(user_info):
-    """Muestra la interfaz para impresión de registros en archivo de claves"""
-    st.header("🖨️ Impresión de Usuarios en Archivo de Claves")
+        st.dataframe(df_mostrar, use_container_width=True)
+
+        # Opción de descarga
+        csv = df_mostrar.to_csv(index=False)
+        st.download_button(
+            label="📥 Descargar consulta como CSV",
+            data=csv,
+            file_name=f"consulta_claves_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("No se encontraron usuarios con los filtros aplicados")
+
+def mostrar_consulta_asistencia(user_info):
+    """Muestra la interfaz para consulta de registros en archivo de asistencia"""
+    st.header("📋 Consulta de Archivo de Asistencia")
 
     # Cargar datos existentes
-    df = cargar_archivo_claves()
+    df = cargar_archivo_asistencia()
     if df is None:
-        st.error("No se pudieron cargar los datos del archivo de claves")
+        st.error("No se pudieron cargar los datos existentes")
         return
 
     if df.empty:
-        st.info("No hay usuarios registrados en el archivo de claves")
+        st.info("No hay registros de asistencia")
         return
 
-    # Filtros para impresión
-    col1, col2 = st.columns(2)
+    # Filtros de búsqueda
+    col1, col2, col3 = st.columns(3)
     with col1:
-        filtro_puesto = st.selectbox(
-            "Filtrar por puesto:",
-            options=["Todos"] + sorted(df['puesto'].unique()),
-            key="filtro_puesto_impresion"
-        )
+        filtro_numero = st.text_input("Filtrar por número económico", key="filtro_numero_asistencia")
     with col2:
-        filtro_turno = st.selectbox(
-            "Filtrar por turno:",
-            options=["Todos"] + sorted(df['turno_laboral'].unique()),
-            key="filtro_turno_impresion"
-        )
+        filtro_nombre = st.text_input("Filtrar por nombre", key="filtro_nombre_asistencia")
+    with col3:
+        filtro_fecha = st.date_input("Filtrar por fecha de turno", key="filtro_fecha_asistencia")
 
     # Aplicar filtros
     df_filtrado = df.copy()
-    
-    if filtro_puesto != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['puesto'] == filtro_puesto]
-    
-    if filtro_turno != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['turno_laboral'] == filtro_turno]
+    if filtro_numero:
+        df_filtrado = df_filtrado[df_filtrado['numero_economico'].str.contains(filtro_numero, case=False, na=False)]
+    if filtro_nombre:
+        df_filtrado = df_filtrado[df_filtrado['nombre_completo'].str.contains(filtro_nombre, case=False, na=False)]
+    if filtro_fecha:
+        fecha_str = filtro_fecha.strftime("%Y-%m-%d")
+        df_filtrado = df_filtrado[df_filtrado['fecha_turno'] == fecha_str]
 
-    if df_filtrado.empty:
-        st.info("No hay usuarios que coincidan con los filtros aplicados")
+    # Mostrar resultados
+    st.subheader(f"📊 Resultados ({len(df_filtrado)} registros)")
+
+    if not df_filtrado.empty:
+        # Seleccionar columnas a mostrar
+        columnas_mostrar = ['fecha', 'fecha_turno', 'numero_economico', 'nombre_completo', 'puesto', 
+                          'servicio', 'turno_laboral', 'hora_entrada', 'incidencias', 'suplencia']
+
+        df_mostrar = df_filtrado[columnas_mostrar]
+
+        # Formatear datos para mejor visualización
+        df_mostrar['puesto'] = df_mostrar['puesto'].str.title()
+        df_mostrar['suplencia'] = df_mostrar['suplencia'].str.upper()
+
+        st.dataframe(df_mostrar, use_container_width=True)
+
+        # Opción de descarga
+        csv = df_mostrar.to_csv(index=False)
+        st.download_button(
+            label="📥 Descargar consulta como CSV",
+            data=csv,
+            file_name=f"consulta_asistencia_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("No se encontraron registros con los filtros aplicados")
+
+def generar_reporte_pdf(user_info):
+    """Genera un reporte en PDF con los datos de asistencia"""
+    st.header("📄 Generar Reporte PDF de Asistencia")
+
+    # Cargar datos existentes
+    df = cargar_archivo_asistencia()
+    if df is None:
+        st.error("No se pudieron cargar los datos existentes")
         return
 
-    # Opciones de formato
-    formato = st.radio(
-        "Formato de impresión:",
-        ["Tabla resumen", "Listado detallado", "Formato PDF"],
-        horizontal=True
-    )
+    if df.empty:
+        st.info("No hay registros de asistencia para generar reporte")
+        return
 
-    if st.button("🖨️ Generar Reporte", type="primary"):
-        if formato == "Tabla resumen":
-            generar_tabla_resumen(df_filtrado)
-        elif formato == "Listado detallado":
-            generar_listado_detallado(df_filtrado)
-        elif formato == "Formato PDF":
-            generar_pdf(df_filtrado)
-
-def generar_tabla_resumen(df):
-    """Genera una tabla resumen de los usuarios"""
-    st.subheader("📊 Tabla Resumen de Usuarios")
-    
-    # Mostrar estadísticas generales
-    col1, col2, col3, col4 = st.columns(4)
+    # Filtros para el reporte
+    col1, col2 = st.columns(2)
     with col1:
-        st.metric("Total de usuarios", len(df))
+        fecha_inicio = st.date_input("Fecha de inicio", key="fecha_inicio_reporte")
     with col2:
-        st.metric("Puestos diferentes", df['puesto'].nunique())
-    with col3:
-        st.metric("Turnos diferentes", df['turno_laboral'].nunique())
-    with col4:
-        st.metric("Suplentes", len(df[df['suplencia'] == 'SI']))
-    
-    # Mostrar tabla
-    columnas_a_mostrar = ['numero_economico', 'nombre_completo', 'puesto', 'servicio', 'turno_laboral', 'suplencia']
-    df_display = df[columnas_a_mostrar].copy()
-    
-    st.dataframe(
-        df_display,
-        column_config={
-            "numero_economico": "N° Económico",
-            "nombre_completo": "Nombre",
-            "puesto": "Puesto",
-            "servicio": "Servicio",
-            "turno_laboral": "Turno",
-            "suplencia": "Suplencia"
-        },
-        hide_index=True,
-        use_container_width=True
-    )
+        fecha_fin = st.date_input("Fecha de fin", key="fecha_fin_reporte")
 
-def generar_listado_detallado(df):
-    """Genera un listado detallado de los usuarios"""
-    st.subheader("📋 Listado Detallado de Usuarios")
-    
-    for idx, usuario in df.iterrows():
-        with st.expander(f"👤 {usuario['nombre_completo']} - {usuario['puesto']}"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**Número Económico:** {usuario['numero_economico']}")
-                st.write(f"**Puesto:** {usuario['puesto']}")
-                st.write(f"**Servicio:** {usuario['servicio']}")
-                st.write(f"**Turno:** {usuario['turno_laboral']}")
-            with col2:
-                st.write(f"**Correo Electrónico:** {usuario.get('correo_electronico', 'No especificado')}")
-                st.write(f"**Suplencia:** {usuario['suplencia']}")
-                st.write(f"**N° Evento:** {usuario['numero_evento']}")
-                st.write(f"**N° Consecutivo:** {usuario['numero_consecutivo']}")
+    # Filtrar datos por fecha
+    if fecha_inicio and fecha_fin:
+        if fecha_inicio > fecha_fin:
+            st.error("❌ La fecha de inicio no puede ser mayor a la fecha de fin")
+            return
 
-def generar_pdf(df):
-    """Genera un PDF con la información de los usuarios"""
-    try:
-        # Crear buffer para el PDF
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-        elements = []
-        
-        # Estilos
-        styles = getSampleStyleSheet()
-        title_style = styles['Heading1']
-        normal_style = styles['Normal']
-        
-        # Título
-        title = Paragraph("Reporte de Usuarios - Archivo de Claves", title_style)
-        elements.append(title)
-        elements.append(Spacer(1, 12))
-        
-        # Información del reporte
-        fecha = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        info_text = f"Generado el: {fecha} | Total de usuarios: {len(df)}"
-        info_paragraph = Paragraph(info_text, normal_style)
-        elements.append(info_paragraph)
-        elements.append(Spacer(1, 12))
-        
-        # Preparar datos para la tabla
-        data = [['N° Económico', 'Nombre', 'Puesto', 'Servicio', 'Turno', 'Suplencia']]
-        
-        for _, usuario in df.iterrows():
-            data.append([
-                usuario['numero_economico'],
-                usuario['nombre_completo'],
-                usuario['puesto'],
-                usuario['servicio'],
-                usuario['turno_laboral'],
-                usuario['suplencia']
-            ])
-        
-        # Crear tabla
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        
-        elements.append(table)
-        
-        # Construir PDF
-        doc.build(elements)
-        
-        # Preparar para descarga
-        buffer.seek(0)
-        pdf_bytes = buffer.getvalue()
-        
-        # Crear botón de descarga
-        st.success("✅ PDF generado correctamente")
-        st.download_button(
-            label="📥 Descargar PDF",
-            data=pdf_bytes,
-            file_name=f"reporte_usuarios_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
-        
-    except Exception as e:
-        st.error(f"❌ Error al generar PDF: {str(e)}")
+        fecha_inicio_str = fecha_inicio.strftime("%Y-%m-%d")
+        fecha_fin_str = fecha_fin.strftime("%Y-%m-%d")
+
+        df_filtrado = df[
+            (df['fecha_turno'] >= fecha_inicio_str) & 
+            (df['fecha_turno'] <= fecha_fin_str)
+        ]
+    else:
+        df_filtrado = df
+
+    if df_filtrado.empty:
+        st.info("No hay registros en el rango de fechas seleccionado")
+        return
+
+    st.info(f"📊 Se generará reporte con {len(df_filtrado)} registros")
+
+    if st.button("🖨️ Generar Reporte PDF"):
+        try:
+            # Crear PDF
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            elements = []
+
+            # Estilos
+            styles = getSampleStyleSheet()
+            style_normal = styles['Normal']
+            style_heading = styles['Heading1']
+
+            # Título
+            title = Paragraph(f"Reporte de Asistencia - {fecha_inicio_str} a {fecha_fin_str}", style_heading)
+            elements.append(title)
+            elements.append(Spacer(1, 12))
+
+            # Preparar datos para la tabla
+            datos_tabla = [['Fecha', 'Núm. Econ.', 'Nombre', 'Puesto', 'Servicio', 'Turno', 'Hora Entrada', 'Incidencias']]
+
+            for _, row in df_filtrado.iterrows():
+                datos_tabla.append([
+                    row['fecha_turno'],
+                    row['numero_economico'],
+                    row['nombre_completo'],
+                    row['puesto'].title(),
+                    row['servicio'],
+                    row['turno_laboral'],
+                    row['hora_entrada'],
+                    row['incidencias']
+                ])
+
+            # Crear tabla
+            tabla = Table(datos_tabla)
+            tabla.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+
+            elements.append(tabla)
+
+            # Generar PDF
+            doc.build(elements)
+            pdf_data = buffer.getvalue()
+            buffer.close()
+
+            # Descargar PDF
+            st.download_button(
+                label="📥 Descargar Reporte PDF",
+                data=pdf_data,
+                file_name=f"reporte_asistencia_{fecha_inicio_str}_a_{fecha_fin_str}.pdf",
+                mime="application/pdf"
+            )
+
+        except Exception as e:
+            st.error(f"❌ Error generando PDF: {str(e)}")
 
 # ====================
 # FUNCIÓN PRINCIPAL
@@ -1421,14 +1457,14 @@ def main():
     # Configuración de la página
     st.set_page_config(
         page_title="Sistema de Administración - Archivo de Claves",
-        page_icon="🔐",
+        page_icon="🏥",
         layout="wide",
         initial_sidebar_state="expanded"
     )
 
     # Verificar autenticación
     authenticated, user_info = authenticate_user()
-    
+
     if not authenticated:
         return
 
@@ -1440,42 +1476,47 @@ def main():
     if user_info.get('turno_laboral'):
         st.sidebar.write(f"**Turno:** {user_info['turno_laboral']}")
 
-    # Opciones del menú principal
-    st.sidebar.title("📋 Menú Principal")
+    st.sidebar.markdown("---")
+
+    # Menú de navegación
+    st.sidebar.title("📋 Menú de Navegación")
     opcion = st.sidebar.radio(
-        "Seleccione una operación:",
+        "Seleccione una opción:",
         [
             "📝 Creación de Usuarios",
-            "✏️ Modificación de Usuarios", 
-            "🗑️ Baja de Usuarios",
-            "👥 Consulta de Usuarios",
-            "🖨️ Impresión de Usuarios"
+            "✏️ Edición de Usuarios", 
+            "🗑️ Eliminación de Usuarios",
+            "🔍 Consulta de Claves",
+            "📋 Consulta de Asistencia",
+            "📄 Generar Reporte PDF"
         ]
     )
 
-    # Navegación entre opciones
+    # Navegación entre páginas
     if opcion == "📝 Creación de Usuarios":
         mostrar_creacion_claves(user_info)
-    elif opcion == "✏️ Modificación de Usuarios":
-        mostrar_modificacion_claves(user_info)
-    elif opcion == "🗑️ Baja de Usuarios":
-        mostrar_baja_claves(user_info)
-    elif opcion == "👥 Consulta de Usuarios":
+    elif opcion == "✏️ Edición de Usuarios":
+        mostrar_edicion_claves(user_info)
+    elif opcion == "🗑️ Eliminación de Usuarios":
+        mostrar_eliminacion_claves(user_info)
+    elif opcion == "🔍 Consulta de Claves":
         mostrar_consulta_claves(user_info)
-    elif opcion == "🖨️ Impresión de Usuarios":
-        mostrar_impresion_claves(user_info)
+    elif opcion == "📋 Consulta de Asistencia":
+        mostrar_consulta_asistencia(user_info)
+    elif opcion == "📄 Generar Reporte PDF":
+        generar_reporte_pdf(user_info)
 
-    # Información de debug en sidebar
+    # Información de debug (solo si está activado)
     if CONFIG.DEBUG_MODE:
+        st.sidebar.markdown("---")
         st.sidebar.title("🐛 Debug Info")
-        st.sidebar.write(f"Archivo de claves: {CONFIG.FILES['claves']}")
-        st.sidebar.write(f"Archivo de asistencia: {CONFIG.FILES['asistencia']}")
-        st.sidebar.write(f"Host: {CONFIG.REMOTE['HOST']}")
-        st.sidebar.write(f"Directorio: {CONFIG.REMOTE['DIR']}")
+        st.sidebar.write(f"Usuario: {user_info}")
+        st.sidebar.write(f"Archivo claves: {CONFIG.FILES['claves']}")
+        st.sidebar.write(f"Archivo asistencia: {CONFIG.FILES['asistencia']}")
 
-    # Botón de cierre de sesión
+    # Cerrar sesión
     st.sidebar.markdown("---")
-    if st.sidebar.button("🚪 Cerrar Sesión", type="primary", use_container_width=True):
+    if st.sidebar.button("🚪 Cerrar Sesión"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
