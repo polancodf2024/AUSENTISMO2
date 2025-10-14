@@ -409,10 +409,14 @@ def mover_logs_jornada_anterior(user_info):
         sftp = ssh.open_sftp()
 
         # Directorio origen: carpeta específica del usuario
-        user_dir = os.path.join(CONFIG.REMOTE['DIR'], "user_logs_eventos", user_info['numero_economico'])
+        user_dir = f"/home/POLANCO6/AUSENTISMO/user_logs_eventos/{user_info['numero_economico']}/"
 
         # Directorio destino: carpeta principal de logs
-        main_log_dir = os.path.join(CONFIG.REMOTE['DIR'], "user_logs_eventos")
+        main_log_dir = "/home/POLANCO6/AUSENTISMO/user_logs_eventos/"
+
+        if CONFIG.DEBUG_MODE:
+            st.info(f"📁 Directorio origen: {user_dir}")
+            st.info(f"📁 Directorio destino: {main_log_dir}")
 
         try:
             # Verificar si existe el directorio del usuario
@@ -427,22 +431,33 @@ def mover_logs_jornada_anterior(user_info):
                 return True
 
             movidos_count = 0
+            errores_count = 0
+
             for archivo in archivos:
                 origen_path = os.path.join(user_dir, archivo)
                 destino_path = os.path.join(main_log_dir, archivo)
+
+                if CONFIG.DEBUG_MODE:
+                    st.info(f"🔧 Intentando mover: {origen_path} -> {destino_path}")
 
                 # Mover el archivo
                 try:
                     sftp.rename(origen_path, destino_path)
                     movidos_count += 1
                     if CONFIG.DEBUG_MODE:
-                        st.info(f"📁 Movido: {archivo}")
+                        st.success(f"✅ Movido: {archivo}")
                 except Exception as e:
+                    errores_count += 1
                     st.warning(f"⚠️ No se pudo mover {archivo}: {str(e)}")
+                    if CONFIG.DEBUG_MODE:
+                        st.error(f"Detalles del error: {type(e).__name__}")
 
             if CONFIG.DEBUG_MODE:
                 st.success(f"✅ Se movieron {movidos_count} archivos de log")
-            return True
+                if errores_count > 0:
+                    st.warning(f"⚠️ Hubo {errores_count} errores al mover archivos")
+
+            return movidos_count > 0 or errores_count == 0
 
         except FileNotFoundError:
             if CONFIG.DEBUG_MODE:
@@ -451,6 +466,9 @@ def mover_logs_jornada_anterior(user_info):
 
         except Exception as e:
             st.error(f"❌ Error moviendo logs: {str(e)}")
+            if CONFIG.DEBUG_MODE:
+                import traceback
+                st.error(f"Traceback completo: {traceback.format_exc()}")
             return False
 
         finally:
@@ -459,8 +477,10 @@ def mover_logs_jornada_anterior(user_info):
 
     except Exception as e:
         st.error(f"❌ Error en operación de mover logs: {str(e)}")
+        if CONFIG.DEBUG_MODE:
+            import traceback
+            st.error(f"Traceback completo: {traceback.format_exc()}")
         return False
-
 
 def manejar_inicio_jornada(user_info):
     """Maneja la pregunta de inicio de jornada laboral"""
@@ -482,22 +502,31 @@ def manejar_inicio_jornada(user_info):
     if respuesta == "Sí":
         if st.sidebar.button("🔒 Confirmar Inicio de Jornada", use_container_width=True):
             with st.spinner("Procesando inicio de jornada..."):
-                # Incrementar número de evento
-                if incrementar_numero_evento_jornada(user_info):
-                    # Mover logs de jornada anterior
-                    if mover_logs_jornada_anterior(user_info):
-                        st.session_state.ultimo_inicio_jornada = hoy
-                        st.sidebar.success("🎉 Jornada iniciada correctamente")
-                        st.sidebar.info("📁 Logs de jornadas anteriores movidos a la carpeta principal")
-                    else:
-                        st.sidebar.error("❌ Error moviendo logs de jornada anterior")
+                # Mover logs de jornada anterior
+                if mover_logs_jornada_anterior(user_info):
+                    st.session_state.ultimo_inicio_jornada = hoy
+                    st.sidebar.success("🎉 Jornada iniciada correctamente")
+                    st.sidebar.info("📁 Logs de jornadas anteriores movidos a la carpeta principal")
+
+                    # Mostrar información de diagnóstico
+                    if CONFIG.DEBUG_MODE:
+                        st.sidebar.info("🔍 Modo debug: Verificando movimiento de archivos...")
+                        # Listar archivos en el directorio principal para confirmar
+                        try:
+                            ssh = SSHManager.get_connection()
+                            if ssh:
+                                sftp = ssh.open_sftp()
+                                main_dir = "/home/POLANCO6/AUSENTISMO/user_logs_eventos/"
+                                archivos_principales = sftp.listdir(main_dir)
+                                st.sidebar.info(f"📊 Archivos en directorio principal: {len(archivos_principales)}")
+                                sftp.close()
+                                ssh.close()
+                        except Exception as e:
+                            st.sidebar.warning(f"⚠️ No se pudo verificar directorio principal: {str(e)}")
                 else:
-                    st.sidebar.error("❌ Error al incrementar número de evento")
+                    st.sidebar.error("❌ Error moviendo logs de jornada anterior")
     else:
         st.sidebar.info("➡️ Continuando con sesión actual")
-
-
-
 
 def load_csv_data(filename, numero_economico=None):
     """Carga datos desde un archivo CSV remoto"""
@@ -544,28 +573,27 @@ def save_report_to_json(report_data, user_info):
     """Guarda el reporte en formato JSON con el nuevo formato de nombre en el directorio del usuario"""
     try:
         # Obtener datos necesarios para el nombre del archivo
-        numero_evento, turno_laboral = obtener_numero_evento_y_turno(user_info)
+        turno_laboral = obtener_turno_laboral(user_info)
         servicio = obtener_servicio_usuario(user_info)
 
-        if not numero_evento or not servicio or not turno_laboral:
+        if not servicio or not turno_laboral:
             st.error("❌ No se pudieron obtener todos los datos necesarios para el nombre del archivo")
             if CONFIG.DEBUG_MODE:
-                st.error(f"numero_evento: {numero_evento}, servicio: {servicio}, turno_laboral: {turno_laboral}")
+                st.error(f"servicio: {servicio}, turno_laboral: {turno_laboral}")
             return False
 
-        # Limpiar y formatear los valores
-        numero_evento = str(numero_evento).strip()
-        servicio = servicio.strip().replace(' ', '_')
+        # Limpiar y formatear los valores - eliminar caracteres problemáticos
+        servicio = servicio.strip().replace(' ', '_').replace('(', '').replace(')', '').replace(':', '').replace('/', '_')
         numero_economico = user_info['numero_economico'].strip()
-        turno_laboral = turno_laboral.strip().replace(' ', '_')
+        turno_laboral = turno_laboral.strip().replace(' ', '_').replace('(', '').replace(')', '').replace(':', '').replace('/', '_')
 
         # Obtener fecha y hora actual en formato YY-MM-DD-HH-MM-SS
         fecha_actual = datetime.now(pytz.timezone('America/Mexico_City'))
         fecha_formateada = fecha_actual.strftime("%y-%m-%d")
-        hora_formateada = fecha_actual.strftime("%H-%M-%S")
+        hora_formateada = fecha_actual.strftime("%H-%M-%S-%f")[:-3]  # Quitar últimos 3 dígitos de microsegundos
 
         # Crear nombre de archivo con timestamp para evitar colisiones
-        filename = f"{numero_evento}.evento.{servicio}.{numero_economico}.{fecha_formateada}.{hora_formateada}.{turno_laboral}.json"
+        filename = f"{fecha_formateada}.{hora_formateada}.{servicio}.{numero_economico}.{turno_laboral}.json"
 
         if CONFIG.DEBUG_MODE:
             st.info(f"📁 Nombre de archivo generado: {filename}")
@@ -577,7 +605,6 @@ def save_report_to_json(report_data, user_info):
             'puesto': user_info['puesto'],
             'fecha_reporte': datetime.now(pytz.timezone('America/Mexico_City')).strftime("%Y-%m-%d %H:%M:%S"),
             'archivo': filename,
-            'numero_evento': numero_evento,
             'servicio': servicio,
             'turno_laboral': turno_laboral,
             'timestamp': fecha_actual.timestamp()  # Añadir timestamp único
@@ -590,20 +617,12 @@ def save_report_to_json(report_data, user_info):
 
         # Subir al servidor remoto en el directorio del usuario
         if SSHManager.upload_file(temp_filename, filename, user_info['numero_economico']):
-            # Limpiar archito temporal
+            # Limpiar archivo temporal
             os.unlink(temp_filename)
-
-            # Incrementar el número de evento para el próximo reporte
-            if incrementar_numero_evento(user_info):
-                if CONFIG.DEBUG_MODE:
-                    st.success("✅ Número de evento incrementado para el próximo reporte")
-            else:
-                st.warning("⚠️ No se pudo incrementar el número de evento")
-
             return True
         else:
             st.error("❌ Error subiendo el reporte al servidor")
-            # Limpiar archito temporal en caso de error
+            # Limpiar archivo temporal en caso de error
             os.unlink(temp_filename)
             return False
 
@@ -677,128 +696,6 @@ def load_existing_reports(user_info):
             st.error(f"Traceback completo: {traceback.format_exc()}")
         return []
 
-# ====================
-# FUNCIONES DE INCREMENTO 
-# ====================
-@synchronized("data_files")
-def incrementar_numero_evento(user_info):
-    """Incrementa el número de evento del usuario en el archivo de claves"""
-    try:
-        # Cargar el archivo de claves
-        content = SSHManager.get_remote_file(CONFIG.FILES["claves"])
-        if not content:
-            st.error("No se pudo cargar el archivo de claves")
-            return False
-
-        # Convertir contenido a DataFrame
-        claves_df = pd.read_csv(StringIO(content))
-
-        # Limpiar y normalizar nombres de columnas
-        claves_df.columns = claves_df.columns.str.strip().str.lower()
-
-        # Asegurarse de que numero_economico sea string y esté limpio
-        if 'numero_economico' in claves_df.columns:
-            claves_df['numero_economico'] = claves_df['numero_economico'].astype(str).str.strip()
-
-        # Buscar el usuario en el archivo de claves
-        usuario_id_buscado = str(user_info['numero_economico']).strip()
-
-        usuario_encontrado = claves_df[claves_df['numero_economico'] == usuario_id_buscado]
-
-        if usuario_encontrado.empty:
-            st.error(f"❌ Usuario {usuario_id_buscado} no encontrado en el archivo de claves")
-            return False
-
-        # Obtener el índice del usuario
-        usuario_idx = usuario_encontrado.index[0]
-
-        # Obtener y incrementar el número de evento
-        numero_actual = int(claves_df.loc[usuario_idx, 'numero_evento'])
-        nuevo_numero = numero_actual + 1
-        claves_df.loc[usuario_idx, 'numero_evento'] = nuevo_numero
-
-        # Convertir DataFrame to CSV
-        csv_content = claves_df.to_csv(index=False)
-
-        # Guardar el archivo actualizado
-        remote_path = os.path.join(CONFIG.REMOTE['DIR'], CONFIG.FILES["claves"])
-        success = SSHManager.put_remote_file(remote_path, csv_content)
-
-        if success:
-            if CONFIG.DEBUG_MODE:
-                st.info(f"✅ Número de evento incrementado: {numero_actual} → {nuevo_numero}")
-            return True
-        else:
-            st.error("❌ Error al actualizar el archivo de claves")
-            return False
-
-    except Exception as e:
-        st.error(f"❌ Error incrementando número de evento: {str(e)}")
-        if CONFIG.DEBUG_MODE:
-            import traceback
-            st.error(f"Detalles del error: {traceback.format_exc()}")
-        return False
-
-@synchronized("data_files")
-def incrementar_numero_evento_jornada(user_info):
-    """Incrementa el número de evento del usuario en el archivo de claves"""
-    try:
-        # Cargar el archivo de claves
-        content = SSHManager.get_remote_file(CONFIG.FILES["claves"])
-        if not content:
-            st.error("No se pudo cargar el archivo de claves")
-            return False
-
-        # Convertir contenido a DataFrame
-        claves_df = pd.read_csv(StringIO(content))
-
-        # Limpiar y normalizar nombres de columnas
-        claves_df.columns = claves_df.columns.str.strip().str.lower()
-
-        # Asegurarse de que numero_economico sea string y esté limpio
-        if 'numero_economico' in claves_df.columns:
-            claves_df['numero_economico'] = claves_df['numero_economico'].astype(str).str.strip()
-
-        # Buscar el usuario en el archivo de claves
-        usuario_id_buscado = str(user_info['numero_economico']).strip()
-
-        usuario_encontrado = claves_df[claves_df['numero_economico'] == usuario_id_buscado]
-
-        if usuario_encontrado.empty:
-            st.error(f"❌ Usuario {usuario_id_buscado} no encontrado en el archivo de claves")
-            return False
-
-        # Obtener el índice del usuario
-        usuario_idx = usuario_encontrado.index[0]
-
-        # Obtener y incrementar el número de evento
-        numero_actual = int(claves_df.loc[usuario_idx, 'numero_evento'])
-        nuevo_numero = numero_actual + 1
-        claves_df.loc[usuario_idx, 'numero_evento'] = nuevo_numero
-
-        # Convertir DataFrame to CSV
-        csv_content = claves_df.to_csv(index=False)
-
-        # Guardar el archivo actualizado
-        remote_path = os.path.join(CONFIG.REMOTE['DIR'], CONFIG.FILES["claves"])
-        success = SSHManager.put_remote_file(remote_path, csv_content)
-
-        if success:
-            if CONFIG.DEBUG_MODE:
-                st.info(f"✅ Número de evento incrementado: {numero_actual} → {nuevo_numero}")
-            return True
-        else:
-            st.error("❌ Error al actualizar el archivo de claves")
-            return False
-
-    except Exception as e:
-        st.error(f"❌ Error incrementando número de evento: {str(e)}")
-        if CONFIG.DEBUG_MODE:
-            import traceback
-            st.error(f"Detalles del error: {traceback.format_exc()}")
-        return False
-    
-
 def update_report_in_json(updated_data, filename, user_info):
     """Actualiza un reporte existente en formato JSON en el directorio del usuario"""
     try:
@@ -819,12 +716,12 @@ def update_report_in_json(updated_data, filename, user_info):
 
         # Subir al servidor remoto (reemplazar el existente) en el directorio del usuario
         if SSHManager.upload_file(temp_filename, filename, user_info['numero_economico']):
-            # Limpiar archito temporal
+            # Limpiar archivo temporal
             os.unlink(temp_filename)
             return True
         else:
             st.error("❌ Error subiendo el reporte actualizado al servidor")
-            # Limpiar archito temporal en caso de error
+            # Limpiar archivo temporal en caso de error
             os.unlink(temp_filename)
             return False
 
@@ -834,7 +731,6 @@ def update_report_in_json(updated_data, filename, user_info):
             import traceback
             st.error(f"Traceback completo: {traceback.format_exc()}")
         return False
-
 
 def show_update_form(user_info):
     """Muestra el formulario de actualización de eventos existentes"""
@@ -854,7 +750,9 @@ def show_update_form(user_info):
         # Crear descripción para el dropdown
         paciente_nombre = report.get('paciente', {}).get('nombre', 'Nombre no disponible')
         fecha_reporte = report['metadata'].get('fecha_reporte', 'Fecha no disponible')
-        descripcion = f"{paciente_nombre} - {fecha_reporte} - {report['filename']}"
+        # Remover comillas del nombre de archivo para mostrar
+        archivo_limpio = report['filename'].replace("'", "")
+        descripcion = f"{paciente_nombre} - {fecha_reporte} - {archivo_limpio}"
         report_options.append(descripcion)
 
     selected_report = st.selectbox(
@@ -1378,7 +1276,6 @@ def authenticate_user():
 
     return False, None
 
-
 # ====================
 # SECCIONES DEL CUESTIONARIO
 # ====================
@@ -1634,7 +1531,6 @@ def show_patient_data(report_data=None):
                                                        value=default_paciente.get('diagnostico', ''))
     return paciente_data
 
-
 def show_event_description(report_data=None):
     """Muestra la descripción narrativa del evento"""
     with st.expander("📝 Descripción Narrativa del Evento", expanded=False):
@@ -1670,7 +1566,6 @@ def show_event_description(report_data=None):
             )
     
     return descripcion
-
 
 def generate_pdf_report(report_data):
     """Genera un PDF completo del reporte de evento adverso con todos los campos"""
@@ -1925,7 +1820,6 @@ def generate_pdf_report(report_data):
                 ["Puesto:", metadata.get('puesto', 'N/A')],
                 ["Fecha de reporte:", metadata.get('fecha_reporte', 'N/A')],
                 ["Archivo:", metadata.get('archivo', 'N/A')],
-                ["Número de evento:", str(metadata.get('numero_evento', 'N/A'))],
                 ["Servicio:", metadata.get('servicio', 'N/A')],
                 ["Turno laboral:", metadata.get('turno_laboral', 'N/A')]
             ]
@@ -1966,7 +1860,6 @@ def generate_pdf_report(report_data):
             import traceback
             st.error(f"Traceback completo: {traceback.format_exc()}")
         return None
-
 
 def show_immediate_actions(report_data=None):
     """Muestra las acciones inmediatas tomadas"""
@@ -2013,8 +1906,6 @@ def show_immediate_actions(report_data=None):
 
     return acciones
 
-
-
 def get_index(options, value):
     """Obtiene el índice de un valor en una lista de opciones"""
     if not value:
@@ -2023,7 +1914,6 @@ def get_index(options, value):
         return options.index(value)
     except ValueError:
         return 0
-
 
 def show_clinical_data(report_data=None):
     """Muestra datos clínicos relevantes"""
@@ -2105,51 +1995,6 @@ def show_clinical_data(report_data=None):
                                               value=default_clinica.get('signos_alerta', ''))
     
     return clinica
-
-def show_immediate_actions(report_data=None):
-    """Muestra las acciones inmediatas tomadas"""
-    with st.expander("⚡ Acciones Inmediatas Tomadas", expanded=False):
-        # Obtener valores por defecto si estamos en modo edición
-        default_acciones = {}
-        if report_data and 'acciones' in report_data:
-            default_acciones = report_data['acciones']
-        
-        acciones = {}
-        
-        cols = st.columns(2)
-        with cols[0]:
-            acciones["notificacion_medico"] = st.checkbox(
-                "Médico notificado inmediatamente",
-                value=default_acciones.get('notificacion_medico', False)
-            )
-            acciones["monitoreo_intensivo"] = st.checkbox(
-                "Monitoreo intensificado",
-                value=default_acciones.get('monitoreo_intensivo', False)
-            )
-            acciones["medicamento_administrado"] = st.checkbox(
-                "Medicamento de emergencia administrado",
-                value=default_acciones.get('medicamento_administrado', False)
-            )
-        with cols[1]:
-            acciones["equipo_revisado"] = st.checkbox(
-                "Equipo revisado/reemplazado",
-                value=default_acciones.get('equipo_revisado', False)
-            )
-            acciones["protocolo_activado"] = st.checkbox(
-                "Protocolo de emergencia activado",
-                value=default_acciones.get('protocolo_activado', False)
-            )
-            acciones["familia_notificada"] = st.checkbox(
-                "Familia notificada",
-                value=default_acciones.get('familia_notificada', False)
-            )
-        
-        acciones["otras_acciones"] = st.text_area(
-            "Otras acciones tomadas",
-            value=default_acciones.get('otras_acciones', '')
-        )
-    
-    return acciones
 
 def show_followup_plan(report_data=None):
     """Muestra el plan de seguimiento"""
@@ -2309,7 +2154,6 @@ def show_notification(report_data=None):
     
     return notificaciones
 
-
 def show_death_certificate(report_data=None):
     """Muestra la sección de certificado de defunción usando pestañas"""
     with st.expander("⚰️ Datos de Defunción (si aplica)", expanded=False):
@@ -2421,131 +2265,6 @@ def show_death_certificate(report_data=None):
 
     return death_data
 
-def get_index(options, value):
-    """Obtiene el índice de un valor en una lista de opciones"""
-    if not value:
-        return 0
-    try:
-        return options.index(value)
-    except ValueError:
-        return 0
-
-def incrementar_numero_consecutivo(user_info):
-    """Incrementa el número consecutivo del usuario en el archivo de claves"""
-    try:
-        # Cargar el archito de claves
-        content = SSHManager.get_remote_file(CONFIG.FILES["claves"])
-        if not content:
-            st.error("No se pudo cargar el archito de claves")
-            return False
-
-        # Convertir contenido a DataFrame
-        claves_df = pd.read_csv(StringIO(content))
-
-        # Limpiar y normalizar nombres de columnas
-        claves_df.columns = claves_df.columns.str.strip().str.lower()
-
-        # Asegurarse de que numero_economico sea string y esté limpio
-        if 'numero_economico' in claves_df.columns:
-            claves_df['numero_economico'] = claves_df['numero_economico'].astype(str).str.strip()
-
-        # Buscar el usuario en el archito de claves
-        usuario_id_buscado = str(user_info['numero_economico']).strip()
-
-        usuario_encontrado = claves_df[claves_df['numero_economico'] == usuario_id_buscado]
-
-        if usuario_encontrado.empty:
-            st.error(f"❌ Usuario {usuario_id_buscado} no encontrado en el archito de claves")
-            return False
-
-        # Obtener el índice del usuario
-        usuario_idx = usuario_encontrado.index[0]
-
-        # Obtener y incrementar el número consecutivo
-        numero_actual = int(claves_df.loc[usuario_idx, 'numero_consecutivo'])
-        nuevo_numero = numero_actual + 1
-        claves_df.loc[usuario_idx, 'numero_consecutivo'] = nuevo_numero
-
-        # Convertir DataFrame a CSV
-        csv_content = claves_df.to_csv(index=False)
-
-        # Guardar el archito actualizado
-        remote_path = os.path.join(CONFIG.REMOTE['DIR'], CONFIG.FILES["claves"])
-        success = SSHManager.put_remote_file(remote_path, csv_content)
-
-        if success:
-            if CONFIG.DEBUG_MODE:
-                st.info(f"✅ Número consecutivo incrementado: {numero_actual} → {nuevo_numero}")
-            return True
-        else:
-            st.error("❌ Error al actualizar el archito de claves")
-            return False
-
-    except Exception as e:
-        st.error(f"❌ Error incrementando número consecutivo: {str(e)}")
-        if CONFIG.DEBUG_MODE:
-            import traceback
-            st.error(f"Detalles del error: {traceback.format_exc()}")
-        return False
-
-def put_remote_file(remote_path, content):
-    """Escribe archito remoto con manejo de errores, creando directorios si no existen"""
-    ssh = SSHManager.get_connection()
-    if not ssh:
-        return False
-
-    try:
-        sftp = ssh.open_sftp()
-
-        # Extraer el directorio del path
-        remote_dir = os.path.dirname(remote_path)
-
-        # Crear directorios recursivamente si no existen
-        try:
-            sftp.listdir(remote_dir)
-        except (IOError, OSError):
-            try:
-                parent_dir = os.path.dirname(remote_dir)
-                if parent_dir and parent_dir != '/':
-                    try:
-                        sftp.listdir(parent_dir)
-                    except (IOError, OSError):
-                        SSHManager._create_remote_dirs(sftp, parent_dir)
-
-                sftp.mkdir(remote_dir)
-                if CONFIG.DEBUG_MODE:
-                    st.info(f"Directorio creado: {remote_dir}")
-            except Exception as e:
-                st.error(f"Error creando directorio {remote_dir}: {str(e)}")
-                return False
-
-        # Crear archito temporal
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tmp', encoding='utf-8') as temp_file:
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-
-        try:
-            sftp.put(temp_file_path, remote_path)
-            if CONFIG.DEBUG_MODE:
-                st.info(f"Archito subido exitosamente: {remote_path}")
-            return True
-        except Exception as e:
-            st.error(f"Error subiendo archito al servidor: {str(e)}")
-            return False
-        finally:
-            try:
-                os.unlink(temp_file_path)
-            except:
-                pass
-    except Exception as e:
-        st.error(f"Error en operación SFTP: {str(e)}")
-        return False
-    finally:
-        try:
-            ssh.close()
-        except:
-            pass
-
 # ====================
 # FUNCIONES DE CORREO
 # ====================
@@ -2636,20 +2355,25 @@ def show_capture_form(user_info):
 
         return
 
-    # Formulario principal de captura
-    with st.form("evento_adverso_form", clear_on_submit=True):
+    # Inicializar session_state para preservar datos del formulario
+    if 'form_data' not in st.session_state:
+        st.session_state.form_data = {}
+
+    # Formulario principal de captura - SIN clear_on_submit para preservar datos
+    with st.form("evento_adverso_form"):
         # Mostrar todas las secciones del formulario
-        contexto = show_event_context()
-        clasificacion = show_event_classification()
-        factores = show_contributing_factors()
-        paciente = show_patient_data()
-        clinica = show_clinical_data()
-        descripcion = show_event_description()
-        acciones = show_immediate_actions()
-        seguimiento = show_followup_plan()
-        documentacion = show_documentation()
-        notificaciones = show_notification()
-        certificado_defuncion = show_death_certificate()
+        # Usar datos guardados si existen, de lo contrario usar valores por defecto
+        contexto = show_event_context(st.session_state.form_data.get('contexto'))
+        clasificacion = show_event_classification(st.session_state.form_data.get('clasificacion'))
+        factores = show_contributing_factors(st.session_state.form_data.get('factores'))
+        paciente = show_patient_data(st.session_state.form_data.get('paciente'))
+        clinica = show_clinical_data(st.session_state.form_data.get('clinica'))
+        descripcion = show_event_description(st.session_state.form_data.get('descripcion'))
+        acciones = show_immediate_actions(st.session_state.form_data.get('acciones'))
+        seguimiento = show_followup_plan(st.session_state.form_data.get('seguimiento'))
+        documentacion = show_documentation(st.session_state.form_data.get('documentacion'))
+        notificaciones = show_notification(st.session_state.form_data.get('notificaciones'))
+        certificado_defuncion = show_death_certificate(st.session_state.form_data.get('certificado_defuncion'))
 
         # Separador antes del botón de envío
         st.markdown("---")
@@ -2674,6 +2398,22 @@ def show_capture_form(user_info):
             if validation_errors:
                 for error in validation_errors:
                     st.error(error)
+
+                # Guardar datos actuales del formulario en session_state para preservarlos
+                st.session_state.form_data = {
+                    'contexto': contexto,
+                    'clasificacion': clasificacion,
+                    'factores': factores,
+                    'paciente': paciente,
+                    'clinica': clinica,
+                    'descripcion': descripcion,
+                    'acciones': acciones,
+                    'seguimiento': seguimiento,
+                    'documentacion': documentacion,
+                    'notificaciones': notificaciones,
+                    'certificado_defuncion': certificado_defuncion
+                }
+                st.info("💾 Los datos del formulario han sido guardados. Corrige los errores y envía nuevamente.")
                 return
 
             # Crear estructura de datos del reporte
@@ -2694,22 +2434,41 @@ def show_capture_form(user_info):
             # Guardar reporte
             with st.spinner("💾 Guardando reporte..."):
                 if save_report_to_json(report_data, user_info):
+                    # Limpiar datos del formulario guardados
+                    if 'form_data' in st.session_state:
+                        del st.session_state.form_data
+
                     st.session_state.report_data = report_data
                     st.session_state.form_submitted = True
                     st.rerun()
                 else:
                     st.error("❌ Error al guardar el reporte. Por favor, intente nuevamente.")
 
+                    # Guardar datos actuales del formulario en session_state para preservarlos
+                    st.session_state.form_data = {
+                        'contexto': contexto,
+                        'clasificacion': clasificacion,
+                        'factores': factores,
+                        'paciente': paciente,
+                        'clinica': clinica,
+                        'descripcion': descripcion,
+                        'acciones': acciones,
+                        'seguimiento': seguimiento,
+                        'documentacion': documentacion,
+                        'notificaciones': notificaciones,
+                        'certificado_defuncion': certificado_defuncion
+                    }
+
 # ====================
 # APLICACIÓN PRINCIPAL
 # ====================
-def obtener_numero_evento_y_turno(user_info):
-    """Obtiene el número de evento y turno laboral del archivo de claves"""
+def obtener_turno_laboral(user_info):
+    """Obtiene el turno laboral del archivo de claves"""
     try:
         claves_df = load_csv_data(CONFIG.FILES["claves"])
         if claves_df is None:
             st.error("❌ No se pudo cargar el archivo de claves")
-            return None, None
+            return None
 
         # Limpiar y convertir a string para comparación
         claves_df['numero_economico'] = claves_df['numero_economico'].astype(str).str.strip()
@@ -2720,20 +2479,19 @@ def obtener_numero_evento_y_turno(user_info):
 
         if usuario_clave.empty:
             st.error(f"❌ Usuario {numero_clean} no encontrado en archivo de claves")
-            return None, None
+            return None
 
-        # Obtener número de evento y turno laboral
-        numero_evento = usuario_clave.iloc[0]['numero_evento']
+        # Obtener turno laboral
         turno_laboral = usuario_clave.iloc[0]['turno_laboral']
 
-        return numero_evento, turno_laboral
+        return turno_laboral
 
     except Exception as e:
-        st.error(f"❌ Error obteniendo número de evento: {str(e)}")
+        st.error(f"❌ Error obteniendo turno laboral: {str(e)}")
         if CONFIG.DEBUG_MODE:
             import traceback
             st.error(f"Traceback completo: {traceback.format_exc()}")
-        return None, None
+        return None
 
 def obtener_servicio_usuario(user_info):
     """Obtiene el servicio del usuario del archivo de enfermeras"""
@@ -2812,10 +2570,8 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-  #  show_logo()
-
     # Título principal
-#    st.markdown('<h1 class="main-header">⚠️ Sistema de Reporte de Eventos Adversos</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">⚠️ Sistema de Reporte de Eventos Adversos</h1>', unsafe_allow_html=True)
 
     # Inicializar variables de session_state
     if 'authenticated' not in st.session_state:
@@ -2912,10 +2668,9 @@ def main():
         st.markdown("---")
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-        #    st.caption("© 2024 Sistema de Reporte de Eventos Adversos")
+            st.caption("© 2024 Sistema de Reporte de Eventos Adversos")
             if CONFIG.DEBUG_MODE:
                 st.caption(f"Modo Debug: Activado | Versión: 10c | Usuario: {user_info['numero_economico']}")
 
 if __name__ == "__main__":
-    main()
-
+    main()        
