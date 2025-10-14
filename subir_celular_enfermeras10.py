@@ -421,9 +421,7 @@ class SistemaEnfermeria:
                 datos_usuario['turno_laboral'],
                 datos_usuario['password'],
                 datos_usuario.get('correo_electronico', ''),  # Campo de correo
-                datos_usuario.get('suplencia', 'NO'),  # NUEVO CAMPO: suplencia
-                datos_usuario.get('numero_evento', '1'),  # NUEVO CAMPO: numero_evento (siempre 1)
-                datos_usuario.get('numero_consecutivo', '1')  # NUEVO CAMPO: numero_consecutivo (siempre 1)
+                datos_usuario.get('suplencia', 'NO')  # NUEVO CAMPO: suplencia
             ]
             
             # Verificar si el archivo existe y leer su contenido
@@ -896,8 +894,6 @@ class SistemaEnfermeria:
                 st.write(f"**Servicio:** {datos['servicio']}")
                 st.write(f"**Turno:** {datos['turno_laboral']}")
                 st.write(f"**Suplencia:** {datos.get('suplencia', 'NO')}")
-                st.write(f"**Número evento:** {datos.get('numero_evento', '1')}")
-                st.write(f"**Número consecutivo:** {datos.get('numero_consecutivo', '1')}")
                 st.write(f"**Fecha de registro:** {datos['fecha_registro']}")
             
             # Estado del almacenamiento remoto
@@ -1242,9 +1238,7 @@ class SistemaEnfermeria:
                         'turno_laboral': turno_laboral,
                         'password': password,
                         'correo_electronico': correo_electronico,
-                        'suplencia': suplencia,  # NUEVO CAMPO
-                        'numero_evento': '1',  # NUEVO CAMPO (siempre 1)
-                        'numero_consecutivo': '1'  # NUEVO CAMPO (siempre 1)
+                        'suplencia': suplencia  # NUEVO CAMPO
                     }
                     
                     # Agregar registro al archivo remoto
@@ -1275,8 +1269,6 @@ class SistemaEnfermeria:
                         'password': password,
                         'correo_electronico': correo_electronico,
                         'suplencia': suplencia,
-                        'numero_evento': '1',
-                        'numero_consecutivo': '1',
                         'fecha_registro': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         'exito_remoto': exito_remoto
                     }
