@@ -1491,9 +1491,9 @@ def incrementar_numero_consecutivo(user_info):
             return False
 
         usuario_idx = usuario_encontrado.index[0]
-        numero_actual = int(claves_df.loc[usuario_idx, 'numero_consecutivo'])
-        nuevo_numero = numero_actual + 1
-        claves_df.loc[usuario_idx, 'numero_consecutivo'] = nuevo_numero
+     #   numero_actual = int(claves_df.loc[usuario_idx, 'numero_consecutivo'])
+     #   nuevo_numero = numero_actual + 1
+   #     claves_df.loc[usuario_idx, 'numero_consecutivo'] = nuevo_numero
 
         csv_content = claves_df.to_csv(index=False)
         remote_path = os.path.join(CONFIG.REMOTE['DIR'], CONFIG.FILES["claves"])
@@ -1684,8 +1684,8 @@ def show_forms():
 
     if 'nuevo_nombre_enfermera' not in st.session_state:
         st.session_state.nuevo_nombre_enfermera = ""
-    if 'nuevo_numero_economico_enfermera' not in st.session_state:
-        st.session_state.nuevo_numero_economico_enfermera = ""
+  #  if 'nuevo_numero_economico_enfermera' not in st.session_state:
+  #      st.session_state.nuevo_numero_economico_enfermera = ""
     if 'nuevo_rol_enfermera' not in st.session_state:
         st.session_state.nuevo_rol_enfermera = "General A"
     if 'habitacion_nuevo_enfermera' not in st.session_state:
