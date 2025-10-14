@@ -132,7 +132,7 @@ class SSHManager:
                 # Determinar el directorio destino
                 if numero_economico:
                     # Para archivos de usuario, usar directorio específico
-                    user_dir = f"/home/POLANCO6/AUSENTISMO/user_logs_eventos/{numero_economico}/"
+                    user_dir = f"/home/POLANCO6/AUSENTISMO2/user_logs_eventos/{numero_economico}/"
                     remote_path = os.path.join(user_dir, remote_filename)
 
                     # Crear directorio del usuario si no existe
@@ -173,7 +173,7 @@ class SSHManager:
             # Determinar el directorio origen
             if numero_economico:
                 # Para archivos de usuario, usar directorio específico
-                user_dir = f"/home/POLANCO6/AUSENTISMO/user_logs_eventos/{numero_economico}/"
+                user_dir = f"/home/POLANCO6/AUSENTISMO2/user_logs_eventos/{numero_economico}/"
                 remote_path = os.path.join(user_dir, remote_filename)
             else:
                 # Para archivos del sistema, usar directorio principal
@@ -222,7 +222,7 @@ class SSHManager:
             # Determinar el directorio a listar
             if numero_economico:
                 # Para archivos de usuario, usar directorio específico
-                dir_path = f"/home/POLANCO6/AUSENTISMO/user_logs_eventos/{numero_economico}/"
+                dir_path = f"/home/POLANCO6/AUSENTISMO2/user_logs_eventos/{numero_economico}/"
             else:
                 # Para archivos del sistema, usar directorio principal
                 dir_path = CONFIG.REMOTE['DIR']
@@ -258,7 +258,7 @@ class SSHManager:
             # Determinar el directorio
             if numero_economico:
                 # Para archivos de usuario, usar directorio específico
-                user_dir = f"/home/POLANCO6/AUSENTISMO/user_logs_eventos/{numero_economico}/"
+                user_dir = f"/home/POLANCO6/AUSENTISMO2/user_logs_eventos/{numero_economico}/"
                 remote_path = os.path.join(user_dir, remote_filename)
             else:
                 # Para archivos del sistema, usar directorio principal
@@ -285,7 +285,7 @@ class SSHManager:
             # Determinar el directorio destino
             if numero_economico:
                 # Para archivos de usuario, usar directorio específico
-                user_dir = f"/home/POLANCO6/AUSENTISMO/user_logs_eventos/{numero_economico}/"
+                user_dir = f"/home/POLANCO6/AUSENTISMO2/user_logs_eventos/{numero_economico}/"
                 full_remote_path = os.path.join(user_dir, os.path.basename(remote_path))
 
                 # Crear directorio del usuario si no existe
@@ -372,7 +372,7 @@ class SSHManager:
                     st.error(f"❌ No se puede acceder al directorio principal: {str(e)}")
                 
                 # Probar creación de directorio de usuario
-                test_user_dir = f"/home/POLANCO6/AUSENTISMO/user_logs_eventos/test_user/"
+                test_user_dir = f"/home/POLANCO6/AUSENTISMO2/user_logs_eventos/test_user/"
                 try:
                     sftp.stat(test_user_dir)
                     st.info("✅ Directorio de usuario ya existe")
@@ -409,10 +409,10 @@ def mover_logs_jornada_anterior(user_info):
         sftp = ssh.open_sftp()
 
         # Directorio origen: carpeta específica del usuario
-        user_dir = f"/home/POLANCO6/AUSENTISMO/user_logs_eventos/{user_info['numero_economico']}/"
+        user_dir = f"/home/POLANCO6/AUSENTISMO2/user_logs_eventos/{user_info['numero_economico']}/"
 
         # Directorio destino: carpeta principal de logs
-        main_log_dir = "/home/POLANCO6/AUSENTISMO/user_logs_eventos/"
+        main_log_dir = "/home/POLANCO6/AUSENTISMO2/user_logs_eventos/"
 
         if CONFIG.DEBUG_MODE:
             st.info(f"📁 Directorio origen: {user_dir}")
@@ -516,7 +516,7 @@ def manejar_inicio_jornada(user_info):
                             ssh = SSHManager.get_connection()
                             if ssh:
                                 sftp = ssh.open_sftp()
-                                main_dir = "/home/POLANCO6/AUSENTISMO/user_logs_eventos/"
+                                main_dir = "/home/POLANCO6/AUSENTISMO2/user_logs_eventos/"
                                 archivos_principales = sftp.listdir(main_dir)
                                 st.sidebar.info(f"📊 Archivos en directorio principal: {len(archivos_principales)}")
                                 sftp.close()
