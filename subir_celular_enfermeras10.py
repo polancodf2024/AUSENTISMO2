@@ -247,7 +247,6 @@ class SistemaEnfermeria:
     def __init__(self):
         self.SERVICIOS = [
             "Dirección-Enfermería", 
-            "Instituto",
             "Consulta-Externa",
             "Diagnóstico",
             "CEyE-Hospitalización",
