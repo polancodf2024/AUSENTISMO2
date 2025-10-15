@@ -67,14 +67,23 @@ class Config:
         
         # Servicios disponibles
         self.SERVICIOS = [
-            "CEyE-Hospitalización",
+            "Dirección-Enfermería",
+            "Consulta-Externa",
             "Diagnóstico",
-            "Urgencias",
-            "Quirófanos",
-            "Cuidados Intensivos",
-            "Hospitalización",
-            "Consulta Externa",
-            "Otro"
+            "CEyE-Hospitalización", 
+            "Unidad-Coronaria",
+            "Hemodinámica",
+            "3-piso",
+            "Cardio-Neumología",
+            "Nefrología",
+            "CeyE-Quirúrgica",
+            "SOP",
+            "Perfusión",
+            "TIC",
+            "6-Piso",
+            "7-Piso", 
+            "8-Piso",
+            "9-Piso"
         ]
         
         # Opciones de suplencia
