@@ -308,16 +308,16 @@ class SistemaEnfermeria:
             "NC": "Comisión Sindical"
         }
         
-        # Configuración de conexión remota
+        # Configuración de conexión remota desde secrets.toml
         self.remote_config = {
-            'host': '187.217.52.137',
-            'username': 'POLANCO6',
-            'password': 'tt6plco6',
-            'port': 3792,
-            'remote_dir': '/home/POLANCO6/AUSENTISMO2',
-            'file_creacion_enfermeras2': 'aus_creacion_enfermeras2.csv',
-            'file_asistencia_enfermeras2': 'aus_asistencia_enfermeras2.csv',
-            'file_historico_enfermeras2': 'aus_historico_enfermeras2.csv'
+            'host': st.secrets["remote_host"],
+            'username': st.secrets["remote_user"],
+            'password': st.secrets["remote_password"],
+            'port': st.secrets["remote_port"],
+            'remote_dir': st.secrets["remote_dir"],
+            'file_creacion_enfermeras2': st.secrets["file_creacion_enfermeras2"],
+            'file_asistencia_enfermeras2': st.secrets["file_enfermeras2"],
+            'file_historico_enfermeras2': st.secrets["file_historico_enfermeras2"]
         }
         
         self.TURNOS_NOCTURNOS = ["Nocturno (A y B) (20:30-8:00)"]
