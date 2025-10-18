@@ -72,7 +72,7 @@ def download_from_remote(remote_filename, local_filename=None):
         remote_host = st.secrets["remote_host"]
         remote_user = st.secrets["remote_user"]
         remote_password = st.secrets["remote_password"]
-        remote_port = st.secrets.get("remote_port", 22)
+        remote_port = st.secrets.get("remote_port")
         remote_dir = st.secrets["remote_dir"]
         
         # Crear cliente SSH
@@ -216,8 +216,8 @@ def crear_archivo_asistencia(df_creacion):
             'numero_cama': 'int64'
         })
         
-        # Nombre del archivo de asistencia
-        asistencia_filename = "aus_asistencia_pacientes2.csv"
+        # Nombre del archivo de asistencia usando variable de secrets.toml
+        asistencia_filename = st.secrets["file_pacientes2"]
         
         # Guardar archivo de asistencia
         asistencia_df.to_csv(asistencia_filename, index=False, encoding='utf-8')
@@ -393,8 +393,8 @@ def crear_archivo_historico(df_creacion):
             'fecha_alta': 'object'
         })
         
-        # Nombre del archivo histórico
-        historico_filename = "aus_historico_pacientes2.csv"
+        # Nombre del archivo histórico usando variable de secrets.toml
+        historico_filename = st.secrets["file_historico_pacientes2"]
         
         # Guardar archivo histórico
         historico_df.to_csv(historico_filename, index=False, encoding='utf-8')
@@ -447,8 +447,9 @@ def agregar_a_historico_pacientes(historico_filename):
         # Crear cliente SFTP
         sftp_client = ssh_client.open_sftp()
         
-        # Ruta completa del archivo remoto
-        remote_path = f"{remote_dir}/aus_historico_pacientes2.csv"
+        # Ruta completa del archivo remoto usando variable de secrets.toml
+        remote_filename = st.secrets["file_historico_pacientes2"]
+        remote_path = f"{remote_dir}/{remote_filename}"
         
         # Leer el archivo histórico local
         df_nuevo_historico = pd.read_csv(historico_filename)
@@ -486,11 +487,11 @@ def agregar_a_historico_pacientes(historico_filename):
         sftp_client.close()
         ssh_client.close()
         
-        st.success("✅ Registros ADICIONADOS exitosamente a aus_historico_pacientes2.csv")
+        st.success(f"✅ Registros ADICIONADOS exitosamente a {remote_filename}")
         return True
         
     except Exception as e:
-        st.error(f"❌ Error al ADICIONAR registros a aus_historico_pacientes2.csv: {str(e)}")
+        st.error(f"❌ Error al ADICIONAR registros a {st.secrets['file_historico_pacientes2']}: {str(e)}")
         try:
             sftp_client.close()
         except:
@@ -802,390 +803,436 @@ def excel_to_csv(excel_file, csv_file=None, sheet_name=0, fecha_nac_col=None):
             'diagnostico': 'object',
             'fecha_ingreso': 'object',
             'turno_laboral': 'object',
-            'fecha_alta': 'object'  # Solo el campo fecha_alta normal
+            'fecha_alta': 'object',
+            '_fecha_alta_original_temp': 'object'  # Campo temporal interno
         })
         
-        # Limpiar cualquier valor NaN que pueda causar problemas
-        layout_df = layout_df.fillna({
-            'expediente': 'EXP00000',
-            'nombre_completo': 'Pendiente',
-            'diagnostico': 'Pendiente',
-            'fecha_ingreso': '2025-09-24',
-            'turno_laboral': 'Estancia Corta (0:00 - 24:00)',
-            'fecha_alta': ''  # Llenar con cadena vacía si hay NaN
-        })
+        # Guardar como CSV
+        layout_df.to_csv(csv_filename, index=False, encoding='utf-8')
         
-        # Guardar como CSV localmente (sin el campo temporal)
-        columnas_para_csv = [col for col in layout_df.columns if not col.startswith('_')]
-        layout_df[columnas_para_csv].to_csv(csv_filename, index=False, encoding='utf-8')
+        st.success(f"✅ **Archivo convertido exitosamente:** {csv_filename}")
+        st.info(f"📊 **Total de registros convertidos:** {len(layout_df)}")
         
-        st.success(f"✅ Conversión exitosa: {csv_filename}")
-        st.info(f"📊 Filas convertidas: {len(layout_df)}")
-        st.info(f"📋 Columnas: {len(columnas_para_csv)}")
-        st.info(f"🏥 Servicio detectado: {servicio}")
-        
-        # Mostrar estadísticas del nuevo campo fecha_alta
-        if fch_alta_col:
-            altas_count = (layout_df['fecha_alta'] == 'Alta').sum()
-            st.info(f"📈 Pacientes con alta: {altas_count} de {len(layout_df)}")
+        # Mostrar estadísticas de altas
+        total_altas = sum(1 for x in fechas_alta if x == "Alta")
+        st.info(f"🏥 **Pacientes con alta:** {total_altas}")
         
         return csv_filename, layout_df
         
-    except FileNotFoundError:
-        st.error(f"❌ Error: No se encontró el archivo")
-        return None, None
     except Exception as e:
-        st.error(f"❌ Error durante la conversión: {str(e)}")
+        st.error(f"❌ **Error en la conversión:** {str(e)}")
         import traceback
-        st.error(f"🔍 Detalles del error: {traceback.format_exc()}")
+        st.error(f"🔍 **Detalles del error:** {traceback.format_exc()}")
         return None, None
 
 def main():
-    st.set_page_config(page_title="Convertidor Excel a CSV", page_icon="📊")
+    st.title("🏥 Sistema de Gestión de Ausentismo - Pacientes")
     
-    st.title("📊 Convertidor de Excel a CSV")
-    st.markdown("---")
+    # Configuración de la página
+    st.set_page_config(
+        page_title="Sistema Ausentismo Pacientes",
+        page_icon="🏥",
+        layout="wide"
+    )
     
-    # Información sobre el layout
-    with st.expander("📋 Layout de los archivos generados"):
-        st.write("""
-        **Archivo de Creación de Pacientes (aus_creacion_pacientes2.csv):**
-        - **expediente**: Número de expediente del paciente
-        - **numero_cama**: Número de cama asignada
-        - **nombre_completo**: Nombre completo del paciente
-        - **servicio**: Servicio médico (se determina automáticamente del nombre del archivo)
-        - **edad**: Edad calculada automáticamente desde la fecha de nacimiento
-        - **diagnostico**: Diagnóstico médico
-        - **fecha_ingreso**: Fecha de ingreso (YYYY-MM-DD)
-        - **turno_laboral**: Turno laboral (siempre: Estancia Corta (0:00 - 24:00))
-        - **fecha_alta**: Si existe fecha en columna "Fch Alta", se pone "Alta", sino queda vacío
-        
-        **Archivo de Asistencia (aus_asistencia_pacientes2.csv):**
-        - **fecha**: Fecha y hora completa del registro (YYYY-MM-DD HH:MM)
-        - **fecha_turno**: Fecha del turno (YYYY-MM-DD)
-        - **expediente**: Número de expediente del paciente
-        - **nombre_completo**: Nombre completo del paciente
-        - **servicio**: Servicio médico
-        - **turno_laboral**: Se usa el mismo turno_laboral del archivo de creación
-        - **hora_entrada**: Se extrae de fecha_ingreso del archivo de creación (formato HH:MM)
-        - **incidencias**: Siempre "NO" por defecto
-        - **edad**: Edad del paciente
-        - **fecha_ingreso**: Fecha de ingreso
-        - **diagnostico**: Diagnóstico médico
-        - **numero_cama**: Número de cama asignada
-        
-        **Archivo Histórico (aus_historico_pacientes2.csv):**
-        - **fecha**: Fecha y hora completa del registro (YYYY-MM-DD HH:MM)
-        - **fecha_turno**: Fecha del turno (YYYY-MM-DD)
-        - **expediente**: Número de expediente del paciente
-        - **nombre_completo**: Nombre completo del paciente
-        - **servicio**: Servicio médico
-        - **turno_laboral**: Se usa el mismo turno_laboral del archivo de creación
-        - **hora_entrada**: Se extrae de fecha_ingreso del archivo de creación (formato HH:MM)
-        - **incidencias**: Siempre "ALTA" para pacientes con alta
-        - **edad**: Edad del paciente
-        - **fecha_ingreso**: Fecha de ingreso
-        - **diagnostico**: Diagnóstico médico
-        - **numero_cama**: Número de cama asignada
-        - **fecha_alta**: **MODIFICACIÓN:** Ahora contiene la fecha real en formato YYYY-MM-DD en lugar de "Alta"
-        
-        **Distribución de pacientes:**
-        - 🏥 **Asistencia**: Solo pacientes SIN alta (fecha_alta vacío)
-        - 📚 **Histórico**: Solo pacientes CON alta (fecha_alta = 'Alta')
-        
-        **Archivos generados:**
-        - **Local temporal**: `censo_Unidad-Coronaria.csv` (solo para procesamiento)
-        - **Remoto permanente**: `aus_creacion_pacientes2.csv` (archivo principal en el servidor)
-        - **Remoto permanente**: `aus_asistencia_pacientes2.csv` (archivo de asistencia en el servidor)
-        - **Remoto permanente**: `aus_historico_pacientes2.csv` (archivo histórico en el servidor - se ADICIONAN registros)
-        """)
+    # Sidebar para configuración
+    st.sidebar.header("⚙️ Configuración")
     
-    # Subir archivo
-    uploaded_file = st.file_uploader("Sube tu archivo Excel", type=['xlsx', 'xls'])
+    # Opción para modo supervisor
+    supervisor_mode = st.secrets.get("supervisor_mode", False)
+    if supervisor_mode:
+        st.sidebar.info("🔒 **Modo Supervisor Activado**")
     
-    if uploaded_file is not None:
-        # Leer el archivo para mostrar columnas disponibles
-        try:
-            df_preview = pd.read_excel(uploaded_file)
-            
+    # Opción para modo debug
+    debug_mode = st.secrets.get("debug_mode", False)
+    if debug_mode:
+        st.sidebar.warning("🐛 **Modo Debug Activado**")
+    
+    # Tabs principales
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📤 Subir y Convertir Excel", 
+        "📊 Generar Asistencia", 
+        "📚 Gestión Histórica",
+        "ℹ️ Información del Sistema"
+    ])
+    
+    with tab1:
+        st.header("📤 Subir y Convertir Archivo Excel")
+        
+        # Sección para subir archivo Excel
+        uploaded_file = st.file_uploader(
+            "Selecciona el archivo Excel de pacientes", 
+            type=['xlsx', 'xls'],
+            help="Sube el archivo Excel con los datos de los pacientes"
+        )
+        
+        if uploaded_file is not None:
             # Mostrar información del archivo
-            st.subheader("📄 Información del archivo")
-            col1, col2, col3 = st.columns(3)
+            file_details = {
+                "Nombre": uploaded_file.name,
+                "Tipo": uploaded_file.type,
+                "Tamaño": f"{uploaded_file.size / 1024:.2f} KB"
+            }
+            st.write("📄 **Detalles del archivo:**")
+            st.json(file_details)
             
-            with col1:
-                st.write(f"**Nombre:** {uploaded_file.name}")
+            # Opción para especificar manualmente la columna de fecha de nacimiento
+            st.subheader("🔧 Configuración de Conversión")
             
-            with col2:
-                st.write(f"**Tamaño:** {uploaded_file.size / 1024:.2f} KB")
-                st.write(f"**Filas:** {len(df_preview)}")
-                st.write(f"**Columnas:** {len(df_preview.columns)}")
-            
-            with col3:
-                # Determinar servicio basado en el nombre
-                servicio_detectado = "Unidad-Coronaria" if "CORO" in uploaded_file.name.upper() else "Consulta-Externa"
-                st.write(f"**Servicio detectado:** {servicio_detectado}")
-                st.write(f"**Archivos remotos:** aus_creacion_pacientes2.csv, aus_asistencia_pacientes2.csv, aus_historico_pacientes2.csv")
-            
-            # Verificar si existe columna "Fch Alta"
-            fch_alta_detectada = False
-            if 'Fch Alta' in df_preview.columns:
-                fch_alta_detectada = True
-                st.success("✅ **Columna 'Fch Alta' detectada** - Se agregará campo 'fecha_alta' al CSV")
-            elif len(df_preview.columns) > 8:
-                columna_i = df_preview.columns[8]
-                st.info(f"ℹ️ **Columna en posición I (índice 8):** {columna_i} - Se usará para fecha de alta")
-                fch_alta_detectada = True
-            else:
-                st.warning("⚠️ **No se detectó columna 'Fch Alta' en posición I** - El campo 'fecha_alta' quedará vacío")
-            
-            # Selección manual de columna de fecha de nacimiento
-            st.subheader("🎂 Selección de columna de fecha de nacimiento")
-            
-            st.info("Si la detección automática no funciona, selecciona manualmente la columna que contiene la fecha de nacimiento:")
-            
-            # Crear lista de columnas para selección
-            columnas_disponibles = list(df_preview.columns)
-            columna_fecha_nac = st.selectbox(
-                "Selecciona la columna de fecha de nacimiento:",
-                options=["-- Detección automática --"] + columnas_disponibles,
-                index=0
-            )
-            
-            # Mostrar vista previa de las primeras filas
-            with st.expander("👀 Vista previa del archivo Excel (primeras 5 filas)"):
-                # Crear copia segura para mostrar
-                display_preview = df_preview.head().copy()
-                # Convertir columnas problemáticas a string para visualización
-                for col in display_preview.columns:
-                    if display_preview[col].dtype == 'object':
-                        display_preview[col] = display_preview[col].astype(str)
-                st.dataframe(display_preview, width='stretch')
+            # Leer el archivo para obtener nombres de columnas
+            try:
+                df_preview = pd.read_excel(uploaded_file, nrows=1)
+                columnas_disponibles = df_preview.columns.tolist()
                 
-        except Exception as e:
-            st.error(f"❌ Error al leer el archivo: {str(e)}")
-            return
-        
-        # Opciones de conversión
-        st.subheader("⚙️ Opciones de conversión")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            sheet_option = st.radio(
-                "Selecciona la hoja a convertir:",
-                ["Primera hoja", "Especificar nombre"]
-            )
-        
-        with col2:
-            if sheet_option == "Especificar nombre":
-                sheet_name = st.text_input("Nombre de la hoja:", value="reporte_08102025")
-            else:
-                sheet_name = 0
-        
-        # Botón de conversión
-        if st.button("🔄 Convertir y Subir CSVs", type="primary"):
-            with st.spinner("Convirtiendo archivo..."):
-                # Pasar la columna seleccionada manualmente si no es la opción por defecto
-                fecha_nac_manual = None
-                if columna_fecha_nac != "-- Detección automática --":
-                    fecha_nac_manual = columna_fecha_nac
+                col1, col2 = st.columns(2)
                 
-                resultado, df_creacion = excel_to_csv(
-                    uploaded_file, 
-                    sheet_name=sheet_name, 
-                    fecha_nac_col=fecha_nac_manual
-                )
+                with col1:
+                    fecha_nac_col = st.selectbox(
+                        "Selecciona la columna de FECHA DE NACIMIENTO:",
+                        options=[""] + columnas_disponibles,
+                        help="Si no seleccionas ninguna, se intentará detectar automáticamente"
+                    )
                 
-                if resultado is not None and df_creacion is not None:
-                    # Mostrar vista previa del archivo de creación
-                    st.subheader("👁️ Vista previa del CSV de creación generado")
-                    
-                    # Crear una copia segura para mostrar (evita problemas de serialización)
-                    display_df = df_creacion.copy().head(10)
-                    # Asegurar que todas las columnas sean compatibles
-                    for col in display_df.columns:
-                        if display_df[col].dtype == 'object':
-                            display_df[col] = display_df[col].astype(str)
-                    
-                    st.dataframe(display_df, width='stretch')
-                    
-                    # Crear archivo de asistencia (solo pacientes SIN alta)
-                    st.subheader("📋 Creando archivo de asistencia")
-                    with st.spinner("Generando archivo de asistencia..."):
-                        asistencia_resultado, df_asistencia = crear_archivo_asistencia(df_creacion)
-                    
-                    # Crear archivo histórico (solo pacientes CON alta)
-                    st.subheader("📚 Creando archivo histórico")
-                    with st.spinner("Generando archivo histórico..."):
-                        historico_resultado, df_historico = crear_archivo_historico(df_creacion)
-                    
-                    if asistencia_resultado is not None and df_asistencia is not None:
-                        # Mostrar vista previa del archivo de asistencia
-                        st.subheader("👁️ Vista previa del CSV de asistencia generado")
-                        
-                        # Crear una copia segura para mostrar
-                        display_asistencia = df_asistencia.copy().head(10)
-                        # Asegurar que todas las columnas sean compatibles
-                        for col in display_asistencia.columns:
-                            if display_asistencia[col].dtype == 'object':
-                                display_asistencia[col] = display_asistencia[col].astype(str)
-                        
-                        st.dataframe(display_asistencia, width='stretch')
-                    
-                    if historico_resultado is not None and df_historico is not None:
-                        # Mostrar vista previa del archivo histórico
-                        st.subheader("👁️ Vista previa del CSV histórico generado")
-                        
-                        # Crear una copia segura para mostrar
-                        display_historico = df_historico.copy().head(10)
-                        # Asegurar que todas las columnas sean compatibles
-                        for col in display_historico.columns:
-                            if display_historico[col].dtype == 'object':
-                                display_historico[col] = display_historico[col].astype(str)
-                        
-                        st.dataframe(display_historico, width='stretch')
-                    
-                    # Subir archivos al servidor remoto
-                    st.subheader("🌐 Subiendo archivos al servidor remoto")
-                    
-                    # Subir archivo de creación
-                    with st.spinner("Subiendo archivo de creación al servidor remoto..."):
-                        # Usar file_creacion_pacientes2 del secrets.toml
-                        remote_filename_creacion = st.secrets["file_creacion_pacientes2"]
-                        remote_path_creacion, upload_success_creacion = upload_to_remote(resultado, remote_filename_creacion)
-                        
-                        if upload_success_creacion:
-                            st.success(f"✅ Archivo de creación subido exitosamente como: {remote_filename_creacion}")
-                            st.info(f"📁 Ruta remota: {remote_path_creacion}")
-                    
-                    # Subir archivo de asistencia
-                    if asistencia_resultado is not None:
-                        with st.spinner("Subiendo archivo de asistencia al servidor remoto..."):
-                            remote_filename_asistencia = "aus_asistencia_pacientes2.csv"
-                            remote_path_asistencia, upload_success_asistencia = upload_to_remote(asistencia_resultado, remote_filename_asistencia)
-                            
-                            if upload_success_asistencia:
-                                st.success(f"✅ Archivo de asistencia subido exitosamente como: {remote_filename_asistencia}")
-                                st.info(f"📁 Ruta remota: {remote_path_asistencia}")
-                    
-                    # ADICIONAR registros al archivo histórico remoto
-                    if historico_resultado is not None:
-                        st.subheader("📚 ADICIONANDO registros al histórico remoto")
-                        with st.spinner("Adicionando registros al archivo histórico remoto..."):
-                            adicion_success = agregar_a_historico_pacientes(historico_resultado)
-                            
-                            if adicion_success:
-                                st.success("✅ Registros ADICIONADOS exitosamente al archivo histórico remoto")
-                    
-                    # Descargar archivos remotos
-                    st.subheader("📥 Descargar archivos remotos")
-                    
-                    if upload_success_creacion:
-                        with st.spinner("Preparando archivo de creación para descarga..."):
-                            downloaded_creacion, download_success_creacion = download_from_remote(remote_filename_creacion)
-                            
-                            if download_success_creacion:
-                                with open(downloaded_creacion, "rb") as file:
-                                    btn_creacion = st.download_button(
-                                        label=f"📥 Descargar archivo de creación ({remote_filename_creacion})",
-                                        data=file,
-                                        file_name=remote_filename_creacion,
-                                        mime="text/csv",
-                                        type="primary"
-                                    )
-                                try:
-                                    os.unlink(downloaded_creacion)
-                                except:
-                                    pass
-                    
-                    if upload_success_asistencia and asistencia_resultado is not None:
-                        with st.spinner("Preparando archivo de asistencia para descarga..."):
-                            downloaded_asistencia, download_success_asistencia = download_from_remote(remote_filename_asistencia)
-                            
-                            if download_success_asistencia:
-                                with open(downloaded_asistencia, "rb") as file:
-                                    btn_asistencia = st.download_button(
-                                        label=f"📥 Descargar archivo de asistencia ({remote_filename_asistencia})",
-                                        data=file,
-                                        file_name=remote_filename_asistencia,
-                                        mime="text/csv"
-                                    )
-                                try:
-                                    os.unlink(downloaded_asistencia)
-                                except:
-                                    pass
-                    
-                    # Información adicional
-                    st.subheader("📈 Información de los datasets generados")
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    with col1:
-                        st.metric("Pacientes creación", len(df_creacion))
-                    
-                    with col2:
-                        st.metric("Asistencias generadas", len(df_asistencia) if df_asistencia is not None else 0)
-                    
-                    with col3:
-                        st.metric("Históricos generados", len(df_historico) if df_historico is not None else 0)
-                    
-                    with col4:
-                        servicio = "Unidad-Coronaria" if "CORO" in uploaded_file.name.upper() else "Consulta-Externa"
-                        st.metric("Servicio", servicio)
-                    
-                    # Estadísticas de edad
-                    if 'edad' in df_creacion.columns:
-                        with st.expander("📊 Estadísticas de edad"):
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                st.metric("Edad promedio", f"{df_creacion['edad'].mean():.1f} años")
-                            with col2:
-                                st.metric("Edad mínima", f"{df_creacion['edad'].min()} años")
-                            with col3:
-                                st.metric("Edad máxima", f"{df_creacion['edad'].max()} años")
-                            with col4:
-                                pacientes_con_edad = (df_creacion['edad'] > 0).sum()
-                                st.metric("Pacientes con edad", f"{pacientes_con_edad}")
-                    
-                    # Estadísticas de distribución
-                    with st.expander("🏥 Estadísticas de distribución"):
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            altas_count = (df_creacion['fecha_alta'] == 'Alta').sum() if 'fecha_alta' in df_creacion.columns else 0
-                            st.metric("Pacientes con alta", f"{altas_count}")
-                        with col2:
-                            sin_alta_count = len(df_creacion) - altas_count
-                            st.metric("Pacientes activos", f"{sin_alta_count}")
-                        with col3:
-                            total_pacientes = len(df_creacion)
-                            st.metric("Total pacientes", f"{total_pacientes}")
-                    
-                    # Resumen final
-                    st.success("🎉 Proceso completado exitosamente!")
-                    st.info(f"""
-                    **Resumen:**
-                    - ✅ Archivo local temporal creado: `censo_Unidad-Coronaria.csv`
-                    - ✅ Archivo remoto de creación subido: `{st.secrets['file_creacion_pacientes2']}`
-                    - ✅ Archivo remoto de asistencia subido: `aus_asistencia_pacientes2.csv`
-                    - ✅ Registros ADICIONADOS al histórico remoto: `aus_historico_pacientes2.csv`
-                    - 📊 Total de pacientes procesados: {len(df_creacion)}
-                    - 📋 Total de asistencias generadas: {len(df_asistencia) if df_asistencia is not None else 0}
-                    - 📚 Total de históricos generados: {len(df_historico) if df_historico is not None else 0}
-                    - 🏥 Servicio: {servicio}
-                    - 📍 Archivos principales: **Remotos** (`{st.secrets['file_creacion_pacientes2']}`, `aus_asistencia_pacientes2.csv`, `aus_historico_pacientes2.csv`)
-                    """)
-                    
-                    # Limpiar archivos locales temporales
+                with col2:
+                    sheet_name = st.text_input(
+                        "Nombre de la hoja (opcional):",
+                        value="",
+                        help="Deja vacío para usar la primera hoja"
+                    )
+                
+            except Exception as e:
+                st.error(f"❌ Error leyendo el archivo Excel: {str(e)}")
+                fecha_nac_col = ""
+                sheet_name = ""
+            
+            # Botón para convertir
+            if st.button("🔄 Convertir Excel a CSV", type="primary"):
+                with st.spinner("Convirtiendo archivo Excel a CSV..."):
                     try:
-                        os.unlink(resultado)
-                        if asistencia_resultado is not None:
-                            os.unlink(asistencia_resultado)
-                        if historico_resultado is not None:
-                            os.unlink(historico_resultado)
-                        st.info("🧹 Archivos locales temporales eliminados (los archivos principales están en el servidor remoto)")
-                    except:
-                        pass
-                else:
-                    st.error("❌ Error en la conversión del archivo")
+                        # Reiniciar el puntero del archivo
+                        uploaded_file.seek(0)
+                        
+                        # Convertir Excel a CSV usando variable de secrets.toml
+                        csv_filename = st.secrets["file_creacion_pacientes2"]
+                        
+                        # Usar sheet_name si se especificó, sino usar 0 (primera hoja)
+                        sheet_to_use = sheet_name if sheet_name else 0
+                        
+                        csv_path, df_resultado = excel_to_csv(
+                            uploaded_file, 
+                            csv_filename, 
+                            sheet_name=sheet_to_use,
+                            fecha_nac_col=fecha_nac_col if fecha_nac_col else None
+                        )
+                        
+                        if csv_path and df_resultado is not None:
+                            st.success("✅ **Conversión completada exitosamente!**")
+                            
+                            # Mostrar vista previa del CSV generado
+                            st.subheader("👀 Vista Previa del Archivo CSV Generado")
+                            st.dataframe(df_resultado.head(10), use_container_width=True)
+                            
+                            # Mostrar estadísticas
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Total Registros", len(df_resultado))
+                            with col2:
+                                st.metric("Servicio", df_resultado['servicio'].iloc[0] if len(df_resultado) > 0 else "N/A")
+                            with col3:
+                                altas_count = len(df_resultado[df_resultado['fecha_alta'] == 'Alta'])
+                                st.metric("Pacientes con Alta", altas_count)
+                            
+                            # Opción para subir automáticamente al servidor remoto
+                            if st.button("☁️ Subir CSV al Servidor Remoto", type="secondary"):
+                                with st.spinner("Subiendo archivo al servidor remoto..."):
+                                    remote_path, success = upload_to_remote(csv_path, csv_filename)
+                                    if success:
+                                        st.success(f"✅ **Archivo subido exitosamente a:** {remote_path}")
+                                    else:
+                                        st.error("❌ **Error al subir el archivo al servidor remoto**")
+                            
+                            # Descargar archivo CSV localmente
+                            with open(csv_path, 'rb') as f:
+                                csv_data = f.read()
+                            
+                            st.download_button(
+                                label="📥 Descargar CSV Localmente",
+                                data=csv_data,
+                                file_name=csv_filename,
+                                mime="text/csv",
+                                help="Descarga el archivo CSV generado a tu dispositivo"
+                            )
+                            
+                        else:
+                            st.error("❌ **Error en la conversión del archivo**")
+                            
+                    except Exception as e:
+                        st.error(f"❌ **Error durante la conversión:** {str(e)}")
+                        if debug_mode:
+                            import traceback
+                            st.error(f"🔍 **Detalles del error:** {traceback.format_exc()}")
+    
+    with tab2:
+        st.header("📊 Generar Archivo de Asistencia")
+        
+        # Opción para usar archivo local o descargar del servidor
+        fuente_archivo = st.radio(
+            "Selecciona la fuente del archivo de creación:",
+            ["📁 Usar archivo local", "☁️ Descargar del servidor remoto"],
+            horizontal=True
+        )
+        
+        archivo_creacion_path = None
+        df_creacion = None
+        
+        if fuente_archivo == "📁 Usar archivo local":
+            # Buscar archivo local usando variable de secrets.toml
+            archivo_creacion_local = st.secrets["file_creacion_pacientes2"]
+            if os.path.exists(archivo_creacion_local):
+                archivo_creacion_path = archivo_creacion_local
+                df_creacion = pd.read_csv(archivo_creacion_path)
+                st.success(f"✅ **Archivo local encontrado:** {archivo_creacion_local}")
+            else:
+                st.warning(f"⚠️ **No se encontró el archivo local:** {archivo_creacion_local}")
+        
+        else:  # Descargar del servidor remoto
+            if st.button("⬇️ Descargar Archivo del Servidor Remoto", type="primary"):
+                with st.spinner("Descargando archivo del servidor remoto..."):
+                    # Usar variable de secrets.toml para el nombre del archivo
+                    remote_filename = st.secrets["file_creacion_pacientes2"]
+                    local_path, success = download_from_remote(remote_filename)
+                    
+                    if success:
+                        archivo_creacion_path = local_path
+                        df_creacion = pd.read_csv(archivo_creacion_path)
+                        st.success(f"✅ **Archivo descargado exitosamente:** {remote_filename}")
+                    else:
+                        st.error(f"❌ **Error al descargar el archivo:** {remote_filename}")
+        
+        # Si tenemos datos de creación, mostrar información y opciones
+        if df_creacion is not None:
+            st.subheader("📋 Información del Archivo de Creación")
+            
+            # Mostrar estadísticas
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Pacientes", len(df_creacion))
+            with col2:
+                servicio_principal = df_creacion['servicio'].mode()[0] if len(df_creacion) > 0 else "N/A"
+                st.metric("Servicio Principal", servicio_principal)
+            with col3:
+                pacientes_altas = len(df_creacion[df_creacion['fecha_alta'] == 'Alta'])
+                st.metric("Pacientes con Alta", pacientes_altas)
+            with col4:
+                pacientes_activos = len(df_creacion) - pacientes_altas
+                st.metric("Pacientes Activos", pacientes_activos)
+            
+            # Mostrar vista previa
+            st.dataframe(df_creacion.head(), use_container_width=True)
+            
+            # Botón para generar archivo de asistencia
+            if st.button("🔄 Generar Archivo de Asistencia", type="primary"):
+                with st.spinner("Generando archivo de asistencia..."):
+                    asistencia_path, df_asistencia = crear_archivo_asistencia(df_creacion)
+                    
+                    if asistencia_path and df_asistencia is not None:
+                        st.success("✅ **Archivo de asistencia generado exitosamente!**")
+                        
+                        # Mostrar vista previa del archivo de asistencia
+                        st.subheader("👀 Vista Previa del Archivo de Asistencia")
+                        st.dataframe(df_asistencia.head(), use_container_width=True)
+                        
+                        # Opción para subir automáticamente al servidor remoto
+                        if st.button("☁️ Subir Asistencia al Servidor Remoto", type="secondary"):
+                            with st.spinner("Subiendo archivo de asistencia al servidor remoto..."):
+                                # Usar variable de secrets.toml para el nombre del archivo
+                                remote_filename = st.secrets["file_pacientes2"]
+                                remote_path, success = upload_to_remote(asistencia_path, remote_filename)
+                                if success:
+                                    st.success(f"✅ **Archivo de asistencia subido exitosamente a:** {remote_path}")
+                                else:
+                                    st.error("❌ **Error al subir el archivo de asistencia al servidor remoto**")
+                        
+                        # Descargar archivo de asistencia localmente
+                        with open(asistencia_path, 'rb') as f:
+                            asistencia_data = f.read()
+                        
+                        st.download_button(
+                            label="📥 Descargar Asistencia Localmente",
+                            data=asistencia_data,
+                            file_name=os.path.basename(asistencia_path),
+                            mime="text/csv",
+                            help="Descarga el archivo de asistencia generado a tu dispositivo"
+                        )
+        
+        else:
+            st.info("ℹ️ **Carga o descarga un archivo de creación de pacientes para generar la asistencia**")
+    
+    with tab3:
+        st.header("📚 Gestión de Archivo Histórico")
+        
+        # Verificar si tenemos datos de creación
+        if df_creacion is not None:
+            # Contar pacientes con alta
+            pacientes_con_alta = len(df_creacion[df_creacion['fecha_alta'] == 'Alta'])
+            
+            st.subheader("📊 Estadísticas de Altas")
+            st.info(f"🏥 **Pacientes listos para mover al histórico:** {pacientes_con_alta}")
+            
+            if pacientes_con_alta > 0:
+                # Mostrar pacientes que serán movidos al histórico
+                st.subheader("👥 Pacientes con Alta para Mover al Histórico")
+                df_altas = df_creacion[df_creacion['fecha_alta'] == 'Alta'].copy()
+                st.dataframe(df_altas[['expediente', 'nombre_completo', 'servicio', 'fecha_ingreso']], use_container_width=True)
+                
+                # Botón para generar archivo histórico
+                if st.button("📚 Generar Archivo Histórico", type="primary"):
+                    with st.spinner("Generando archivo histórico..."):
+                        historico_path, df_historico = crear_archivo_historico(df_creacion)
+                        
+                        if historico_path and df_historico is not None:
+                            st.success("✅ **Archivo histórico generado exitosamente!**")
+                            
+                            # Mostrar vista previa del archivo histórico
+                            st.subheader("👀 Vista Previa del Archivo Histórico")
+                            st.dataframe(df_historico.head(), use_container_width=True)
+                            
+                            # Botón para ADICIONAR al histórico remoto
+                            if st.button("🔄 ADICIONAR al Histórico Remoto", type="secondary"):
+                                with st.spinner("Adicionando registros al histórico remoto..."):
+                                    success = agregar_a_historico_pacientes(historico_path)
+                                    if success:
+                                        st.success("✅ **Registros ADICIONADOS exitosamente al archivo histórico remoto!**")
+                                        
+                                        # Mostrar resumen de la operación
+                                        st.subheader("📋 Resumen de la Operación")
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            st.metric("Registros Adicionados", len(df_historico))
+                                        with col2:
+                                            st.metric("Operación", "ADICIÓN")
+                                        
+                                        # Opción para limpiar el archivo de creación local
+                                        if st.checkbox("🗑️ Limpiar pacientes con alta del archivo de creación local"):
+                                            # Filtrar solo pacientes sin alta
+                                            df_creacion_sin_altas = df_creacion[df_creacion['fecha_alta'] != 'Alta'].copy()
+                                            
+                                            # Guardar el archivo actualizado
+                                            archivo_creacion_local = st.secrets["file_creacion_pacientes2"]
+                                            df_creacion_sin_altas.to_csv(archivo_creacion_local, index=False)
+                                            
+                                            st.success(f"✅ **Archivo de creación actualizado:** {len(df_creacion_sin_altas)} pacientes activos")
+                                            
+                                            # Actualizar el DataFrame en memoria
+                                            df_creacion = df_creacion_sin_altas
+                                            
+                                            # Mostrar nuevo conteo
+                                            st.info(f"📊 **Nuevo total de pacientes activos:** {len(df_creacion_sin_altas)}")
+                                    else:
+                                        st.error("❌ **Error al adicionar registros al histórico remoto**")
+                            
+                            # Descargar archivo histórico localmente
+                            with open(historico_path, 'rb') as f:
+                                historico_data = f.read()
+                            
+                            st.download_button(
+                                label="📥 Descargar Histórico Localmente",
+                                data=historico_data,
+                                file_name=os.path.basename(historico_path),
+                                mime="text/csv",
+                                help="Descarga el archivo histórico generado a tu dispositivo"
+                            )
+            else:
+                st.info("ℹ️ **No hay pacientes con alta para mover al histórico**")
+        else:
+            st.info("ℹ️ **Carga o descarga un archivo de creación de pacientes para gestionar el histórico**")
+    
+    with tab4:
+        st.header("ℹ️ Información del Sistema")
+        
+        st.subheader("📁 Archivos de Configuración")
+        
+        # Mostrar configuración actual (sin contraseñas)
+        config_info = {
+            "Servidor SMTP": st.secrets["smtp_server"],
+            "Puerto SMTP": st.secrets["smtp_port"],
+            "Usuario Email": st.secrets["email_user"],
+            "Email Notificación": st.secrets["notification_email"],
+            "Servidor Remoto": st.secrets["remote_host"],
+            "Usuario Remoto": st.secrets["remote_user"],
+            "Puerto Remoto": st.secrets["remote_port"],
+            "Directorio Remoto": st.secrets["remote_dir"],
+            "Modo Supervisor": st.secrets["supervisor_mode"],
+            "Modo Debug": st.secrets["debug_mode"]
+        }
+        
+        st.json(config_info)
+        
+        st.subheader("📊 Archivos del Sistema")
+        
+        archivos_sistema = {
+            "Creación de Pacientes": st.secrets["file_creacion_pacientes2"],
+            "Asistencia de Pacientes": st.secrets["file_pacientes2"],
+            "Histórico de Pacientes": st.secrets["file_historico_pacientes2"],
+            "Eventos Adversos": st.secrets["file_eventos2"],
+            "Suplencias Activas": st.secrets["file_suplencias2"]
+        }
+        
+        st.json(archivos_sistema)
+        
+        st.subheader("🔧 Funcionalidades")
+        
+        funcionalidades = [
+            "✅ Conversión de Excel a CSV con mapeo automático de columnas",
+            "✅ Cálculo automático de edad desde fecha de nacimiento",
+            "✅ Detección automática de pacientes con alta",
+            "✅ Generación de archivos de asistencia",
+            "✅ Gestión de archivo histórico con adición de registros",
+            "✅ Transferencia segura SFTP a servidor remoto",
+            "✅ Soporte para múltiples formatos de fecha",
+            "✅ Modo supervisor para operaciones avanzadas",
+            "✅ Modo debug para troubleshooting"
+        ]
+        
+        for func in funcionalidades:
+            st.write(func)
+        
+        # Información de conexión remota
+        st.subheader("🌐 Estado de Conexión")
+        
+        if st.button("🔍 Probar Conexión al Servidor Remoto"):
+            with st.spinner("Probando conexión al servidor remoto..."):
+                try:
+                    # Obtener credenciales de secrets.toml
+                    remote_host = st.secrets["remote_host"]
+                    remote_user = st.secrets["remote_user"]
+                    remote_password = st.secrets["remote_password"]
+                    remote_port = st.secrets.get("remote_port")
+                    
+                    # Crear cliente SSH
+                    ssh_client = paramiko.SSHClient()
+                    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    
+                    # Conectar al servidor
+                    ssh_client.connect(
+                        hostname=remote_host,
+                        username=remote_user,
+                        password=remote_password,
+                        port=remote_port,
+                        timeout=10
+                    )
+                    
+                    # Ejecutar comando simple
+                    stdin, stdout, stderr = ssh_client.exec_command('pwd')
+                    working_dir = stdout.read().decode().strip()
+                    
+                    # Cerrar conexión
+                    ssh_client.close()
+                    
+                    st.success(f"✅ **Conexión exitosa!** Directorio actual: {working_dir}")
+                    
+                except Exception as e:
+                    st.error(f"❌ **Error de conexión:** {str(e)}")
 
 if __name__ == "__main__":
     main()
