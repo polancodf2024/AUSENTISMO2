@@ -12,6 +12,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
+import pytz  # IMPORTACIÓN AGREGADA PARA ZONA HORARIA
 
 # Configuración de la página
 st.set_page_config(
@@ -102,7 +103,10 @@ st.markdown("""
 
 class SistemaAsistencia:
     def __init__(self):
-        self.archivo_asistencia = f"asistencia_{datetime.date.today().strftime('%Y%m%d')}.csv"
+        # CORREGIDO: Usar zona horaria de Ciudad de México
+        mexico_tz = pytz.timezone('America/Mexico_City')
+        fecha_mexico = datetime.datetime.now(mexico_tz).date()
+        self.archivo_asistencia = f"asistencia_{fecha_mexico.strftime('%Y%m%d')}.csv"
         self.crear_archivo_si_no_existe()
     
     def crear_archivo_si_no_existe(self):
@@ -121,15 +125,23 @@ class SistemaAsistencia:
             'turno': usuario['turno_laboral']
         }
     
+    def obtener_fecha_hora_actual_mexico(self):
+        """CORREGIDO: Obtiene la fecha y hora actual en la zona horaria de Ciudad de México"""
+        mexico_tz = pytz.timezone('America/Mexico_City')
+        ahora_mexico = datetime.datetime.now(mexico_tz)
+        return ahora_mexico
+    
     def registrar_asistencia(self, tipo_registro, usuario, password_usada):
-        """Registrar la asistencia"""
+        """CORREGIDO: Registrar la asistencia con hora de Ciudad de México"""
         try:
             empleado = self.obtener_informacion_empleado(usuario)
-            ahora = datetime.datetime.now()
+            
+            # CORREGIDO: USAR HORA DE CIUDAD DE MÉXICO
+            ahora_mexico = self.obtener_fecha_hora_actual_mexico()
             
             nuevo_registro = {
-                'FECHA': ahora.strftime('%Y-%m-%d'),
-                'HORA': ahora.strftime('%H:%M:%S'),
+                'FECHA': ahora_mexico.strftime('%Y-%m-%d'),
+                'HORA': ahora_mexico.strftime('%H:%M:%S'),
                 'NOMBRE_COMPLETO': empleado['nombre_completo'],
                 'PUESTO': empleado['puesto'],
                 'TURNO': empleado['turno'],
@@ -145,15 +157,18 @@ class SistemaAsistencia:
             return False, str(e)
     
     def obtener_tipo_registro(self, usuario):
-        """Determinar si es entrada o salida basado en registros previos"""
+        """CORREGIDO: Determinar si es entrada o salida basado en registros previos usando hora de México"""
         try:
             df = pd.read_csv(self.archivo_asistencia)
             if df.empty:
                 return "ENTRADA"
             
+            # CORREGIDO: USAR FECHA DE CIUDAD DE MÉXICO
+            mexico_tz = pytz.timezone('America/Mexico_City')
+            hoy_mexico = datetime.datetime.now(mexico_tz).date().strftime('%Y-%m-%d')
+            
             # Buscar registros de hoy para este usuario
-            hoy = datetime.date.today().strftime('%Y-%m-%d')
-            registros_hoy = df[(df['FECHA'] == hoy) & 
+            registros_hoy = df[(df['FECHA'] == hoy_mexico) & 
                              (df['NOMBRE_COMPLETO'] == usuario['nombre_completo'])]
             
             if registros_hoy.empty:
@@ -167,11 +182,15 @@ class SistemaAsistencia:
             return "ENTRADA"
     
     def obtener_registros_hoy_usuario(self, usuario):
-        """Obtener todos los registros de hoy para el usuario"""
+        """CORREGIDO: Obtener todos los registros de hoy para el usuario usando fecha de México"""
         try:
             df = pd.read_csv(self.archivo_asistencia)
-            hoy = datetime.date.today().strftime('%Y-%m-%d')
-            return df[(df['FECHA'] == hoy) & 
+            
+            # CORREGIDO: USAR FECHA DE CIUDAD DE MÉXICO
+            mexico_tz = pytz.timezone('America/Mexico_City')
+            hoy_mexico = datetime.datetime.now(mexico_tz).date().strftime('%Y-%m-%d')
+            
+            return df[(df['FECHA'] == hoy_mexico) & 
                      (df['NOMBRE_COMPLETO'] == usuario['nombre_completo'])]
         except:
             return pd.DataFrame()
@@ -184,14 +203,23 @@ class SistemaCorreo:
         self.email_password = st.secrets["email_password"]
         self.notification_email = st.secrets["notification_email"]
     
+    def obtener_fecha_hora_actual_mexico(self):
+        """CORREGIDO: Obtiene la fecha y hora actual en la zona horaria de Ciudad de México"""
+        mexico_tz = pytz.timezone('America/Mexico_City')
+        ahora_mexico = datetime.datetime.now(mexico_tz)
+        return ahora_mexico
+    
     def enviar_correo_confirmacion(self, destinatario, datos_registro):
-        """Envía un correo de confirmación de asistencia"""
+        """CORREGIDO: Envía un correo de confirmación de asistencia con hora de México"""
         try:
             # Crear el mensaje
             msg = MIMEMultipart()
             msg['From'] = self.email_user
             msg['To'] = destinatario
             msg['Subject'] = "Confirmación de Registro de Asistencia - Sistema de Enfermería"
+            
+            # CORREGIDO: USAR FECHA Y HORA DE CIUDAD DE MÉXICO
+            ahora_mexico = self.obtener_fecha_hora_actual_mexico()
             
             # Crear el cuerpo del mensaje
             cuerpo = f"""
@@ -212,6 +240,7 @@ class SistemaCorreo:
                     <p><strong>Tipo de registro:</strong> {datos_registro['tipo_registro']}</p>
                     <p><strong>Incidencia:</strong> {datos_registro.get('incidencia', 'NO')}</p>
                     <p><strong>Suplencia:</strong> {datos_registro.get('suplencia', 'NO')}</p>
+                    <p><strong>Zona horaria:</strong> Ciudad de México</p>
                 </div>
                 
                 <p style="margin-top: 20px;">
@@ -222,7 +251,7 @@ class SistemaCorreo:
                 
                 <p style="font-size: 12px; color: #666;">
                     Este es un mensaje automático. Por favor no responda a este correo.<br>
-                    Sistema de Registro de Enfermería - {datetime.datetime.now().year}
+                    Sistema de Registro de Enfermería - {ahora_mexico.year}
                 </p>
             </body>
             </html>
@@ -251,7 +280,7 @@ class SistemaEnfermeria:
             "Diagnóstico",
             "CEyE-Hospitalización",
             "Unidad-Coronaria",
-            "Hemodinámica",
+            "Hemodinámia",
             "3-piso",
             "Cardio-Neumología",
             "Nefrología",
@@ -326,6 +355,12 @@ class SistemaEnfermeria:
         self.cargar_datos()
         self.sistema_asistencia = SistemaAsistencia()
         self.sistema_correo = SistemaCorreo()
+
+    def obtener_fecha_hora_actual_mexico(self):
+        """CORREGIDO: Obtiene la fecha y hora actual en la zona horaria de Ciudad de México"""
+        mexico_tz = pytz.timezone('America/Mexico_City')
+        ahora_mexico = datetime.datetime.now(mexico_tz)
+        return ahora_mexico
 
     def cargar_datos(self):
         """Carga los datos desde el archivo JSON"""
@@ -696,26 +731,26 @@ class SistemaEnfermeria:
             return False
 
     def determinar_fecha_turno(self, turno_laboral, hora_actual_str):
-        """Determina la fecha correcta para turnos que cruzan medianoche"""
+        """CORREGIDO: Determina la fecha correcta para turnos que cruzan medianoche usando hora de México"""
         try:
-            # Si no es turno nocturno, usar fecha actual
+            # Si no es turno nocturno, usar fecha actual de México
             if turno_laboral not in self.TURNOS_NOCTURNOS:
-                return datetime.datetime.now().strftime("%Y-%m-%d")
+                return self.obtener_fecha_hora_actual_mexico().strftime("%Y-%m-%d")
             
             # Parsear la hora actual
             hora_actual = datetime.datetime.strptime(hora_actual_str, "%H:%M").time()
             
             # Si es turno nocturno y la hora es antes de las 8:00 AM, usar el día anterior
             if hora_actual < datetime.time(8, 0):  # Antes de las 8:00 AM
-                fecha_correcta = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+                fecha_correcta = (self.obtener_fecha_hora_actual_mexico() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
                 return fecha_correcta
             
-            # Para el resto del día, usar fecha actual
-            return datetime.datetime.now().strftime("%Y-%m-%d")
+            # Para el resto del día, usar fecha actual de México
+            return self.obtener_fecha_hora_actual_mexico().strftime("%Y-%m-%d")
             
         except Exception:
-            # En caso de error, devolver fecha actual
-            return datetime.datetime.now().strftime("%Y-%m-%d")
+            # En caso de error, devolver fecha actual de México
+            return self.obtener_fecha_hora_actual_mexico().strftime("%Y-%m-%d")
 
     def validar_password(self, password):
         """Valida que la contraseña cumpla con los requisitos de seguridad RESTRINGIDOS"""
@@ -1385,10 +1420,10 @@ class SistemaEnfermeria:
             with st.spinner("Procesando registro de asistencia..."):
                 time.sleep(1.5)
                 
-                # Obtener fecha y hora actual
-                ahora = datetime.datetime.now()
-                fecha_completa = ahora.strftime("%Y-%m-%d %H:%M")
-                hora_actual = ahora.strftime("%H:%M")
+                # CORREGIDO: Obtener fecha y hora actual DE CIUDAD DE MÉXICO
+                ahora_mexico = self.obtener_fecha_hora_actual_mexico()
+                fecha_completa = ahora_mexico.strftime("%Y-%m-%d %H:%M")
+                hora_actual = ahora_mexico.strftime("%H:%M")
                 
                 # Determinar fecha de turno
                 fecha_turno = self.determinar_fecha_turno(usuario['turno_laboral'], hora_actual)
@@ -1432,6 +1467,7 @@ class SistemaEnfermeria:
                     <p><strong>Incidencia:</strong> NO (Asistencia normal)</p>
                     <p><strong>Estado archivo remoto:</strong> ✅ Solo registro más reciente conservado</p>
                     <p><strong>Registros anteriores:</strong> ✅ Movidos al histórico</p>
+                    <p><strong>Zona horaria:</strong> Ciudad de México</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -1443,8 +1479,8 @@ class SistemaEnfermeria:
                                 'puesto': usuario['puesto'],
                                 'servicio': usuario['servicio'],
                                 'turno_laboral': usuario['turno_laboral'],
-                                'fecha': ahora.strftime('%Y-%m-%d'),
-                                'hora_registro': ahora.strftime('%H:%M:%S'),
+                                'fecha': ahora_mexico.strftime('%Y-%m-%d'),
+                                'hora_registro': ahora_mexico.strftime('%H:%M:%S'),
                                 'tipo_registro': tipo_registro,
                                 'incidencia': 'NO',
                                 'suplencia': usuario.get('suplencia', 'NO')
@@ -1461,7 +1497,7 @@ class SistemaEnfermeria:
                                 st.warning(f"⚠️ {mensaje_correo}")
                     
                     # Actualizar registros de entrada en el sistema principal
-                    fecha_hora_str = ahora.strftime("%Y-%m-%d %H:%M:%S")
+                    fecha_hora_str = ahora_mexico.strftime("%Y-%m-%d %H:%M:%S")
                     self.usuarios[numero_economico]['registros_entrada'].append(fecha_hora_str)
                     self.guardar_datos()
                         
@@ -1527,6 +1563,7 @@ class SistemaEnfermeria:
                 - Solo se conservará el registro más reciente en el archivo de asistencia
                 - Los registros anteriores se moverán al histórico
                 - El campo suplencia se mantendrá del registro original
+                - **Zona horaria: Ciudad de México**
                 """)
             
             st.markdown('</div>', unsafe_allow_html=True)
@@ -1543,10 +1580,10 @@ class SistemaEnfermeria:
                     with st.spinner("Procesando registro de incidencia..."):
                         time.sleep(1.5)
                         
-                        # Obtener fecha y hora actual para el registro
-                        ahora = datetime.datetime.now()
-                        fecha_completa = ahora.strftime("%Y-%m-%d %H:%M")
-                        hora_actual = ahora.strftime("%H:%M")
+                        # CORREGIDO: Obtener fecha y hora actual DE CIUDAD DE MÉXICO para el registro
+                        ahora_mexico = self.obtener_fecha_hora_actual_mexico()
+                        fecha_completa = ahora_mexico.strftime("%Y-%m-%d %H:%M")
+                        hora_actual = ahora_mexico.strftime("%H:%M")
                         
                         # Usar la fecha seleccionada por el usuario como fecha_turno
                         fecha_turno = fecha_incidencia_str
@@ -1583,8 +1620,8 @@ class SistemaEnfermeria:
                                         'puesto': usuario['puesto'],
                                         'servicio': usuario['servicio'],
                                         'turno_laboral': usuario['turno_laboral'],
-                                        'fecha': ahora.strftime('%Y-%m-%d'),
-                                        'hora_registro': ahora.strftime('%H:%M:%S'),
+                                        'fecha': ahora_mexico.strftime('%Y-%m-%d'),
+                                        'hora_registro': ahora_mexico.strftime('%H:%M:%S'),
                                         'tipo_registro': f"INCIDENCIA-{codigo_incidencia}",
                                         'incidencia': f"{codigo_incidencia} - {descripcion_incidencia}",
                                         'suplencia': usuario.get('suplencia', 'NO')
@@ -1614,6 +1651,7 @@ class SistemaEnfermeria:
                             <p><strong>Hora de entrada:</strong> NO (Incidencia registrada)</p>
                             <p><strong>Estado archivo remoto:</strong> ✅ Solo registro más reciente conservado</p>
                             <p><strong>Registros anteriores:</strong> ✅ Movidos al histórico</p>
+                            <p><strong>Zona horaria:</strong> Ciudad de México</p>
                             </div>
                             """, unsafe_allow_html=True)
                             
