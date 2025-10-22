@@ -274,24 +274,27 @@ class SistemaCorreo:
 
 class SistemaEnfermeria:
     def __init__(self):
+        # ACTUALIZADO: Servicios según el archivo Excel proporcionado
         self.SERVICIOS = [
-            "Dirección-Enfermería", 
-            "Consulta-Externa",
-            "Diagnóstico",
-            "CEyE-Hospitalización",
-            "Unidad-Coronaria",
-            "Hemodinámia",
-            "3-piso",
-            "Cardio-Neumología",
-            "Nefrología",
-            "CeyE-Quirúrgica",
-            "SOP",
-            "Perfusión",
-            "TIC",
-            "6-Piso",
-            "7-Piso",
-            "8-Piso",
-            "9-Piso"
+            "UNIDAD CORONARIA",
+            "CARDIOLOGÍA ADULTOS III", 
+            "CARDIONEUMOLOGÍA",
+            "NEFROLOGÍA",
+            "HEMODINÁMICA",
+            "TERAPIA INTENSIVA CARDIOVASCULAR",
+            "QUIRÓFANO",
+            "CARDIOLOGÍA PEDÍATRICA",
+            "CARDIOLOGÍA ADULTOS VII",
+            "HOSPITALIZACIÓN OCTAVO PISO",
+            "HOSPITALIZACIÓN NOVENO PISO",
+            "CENTRAL DE EQUIPO Y ESTERILIZACIÓN",
+            "COMITÉ DE CONTROL DE INFECCIONES ASOCIADAS A LA ATENCIÓN DE LA SALUD",
+            "VENTILOTERAPIA",
+            "CONSULTA EXTERNA",
+            "BANCO DE SANGRE",
+            "CLÍNICAS DE DIAGNÓSTICO Y TRATAMIENTO",
+            "CLÍNICA DE CUIDADOS PALIATIVOS/APOYO VITAL",
+            "DIRECCIÓN DE ENFERMERÍA Y DEPARTAMENTOS"
         ]
         
         self.PUESTOS = [
