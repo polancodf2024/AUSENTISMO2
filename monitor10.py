@@ -828,6 +828,7 @@ def authenticate_user():
                 # Verificar que sea supervisión de turno
                 if "supervision" not in puesto and "supervisión" not in puesto:
                     st.error("❌ Solo personal con puesto de supervisión puede acceder al sistema de transferencias")
+                    st.error(f"Puesto detectado: '{puesto}' - No contiene 'supervision' o 'supervisión'")
                     log_security_event("auth_unauthorized", {},
                                      f"Intento de acceso no autorizado: {numero_clean} - Puesto: {puesto}")
                     return False, None
@@ -920,27 +921,60 @@ def authenticate_user():
     return False, None
 
 def obtener_servicios():
-    """Devuelve la lista completa de servicios que deben mostrarse siempre"""
+    """Devuelve la lista completa de 20 servicios basada en el Excel"""
     return [
-        "Dirección-Enfermería",
-        "Consulta-Externa",
-        "Diagnóstico",
-        "CEyE-Hospitalización",
-        "Unidad-Coronaria",
-        "Hemodinámica",
-        "3-piso",
-        "Cardio-Neumología",
-        "Nefrología",
-        "CeyE-Quirúrgica",
-        "SOP",
-        "Perfusión",
-        "TIC",
-        "6-Piso",
-        "7-Piso",
-        "8-Piso",
-        "9-Piso"
+        "UNIDAD CORONARIA",
+        "CARDIOLOGÍA ADULTOS III", 
+        "CARDIONEUMOLOGÍA",
+        "NEFROLOGÍA",
+        "HEMODINÁMICA",
+        "TERAPIA INTENSIVA CARDIOVASCULAR",
+        "QUIRÓFANO",
+        "CARDIOLOGÍA PEDÍATRICA",
+        "CARDIOLOGÍA ADULTOS VII",
+        "HOSPITALIZACIÓN OCTAVO PISO",
+        "HOSPITALIZACIÓN NOVENO PISO", 
+        "CENTRAL DE EQUIPO Y ESTERILIZACIÓN",
+        "COMITÉ DE CONTROL DE INFECCIONES ASOCIADAS A LA ATENCIÓN DE LA SALUD",
+        "VENTILOTERAPIA",
+        "CONSULTA EXTERNA",
+        "BANCO DE SANGRE",
+        "CLÍNICAS DE DIAGNÓSTICO Y TRATAMIENTO",
+        "CLÍNICA DE CUIDADOS PALIATIVOS/ APOYO VITAL",
+        "DIRECCIÓN DE ENFERMERÍA Y DEPARTAMENTOS"
     ]
 
+def obtener_servicios_por_pestana():
+    """Devuelve los servicios organizados por pestañas según la propuesta"""
+    return {
+        "🏥 HOSPITALIZACIÓN Y UNIDADES CRÍTICAS": [
+            "UNIDAD CORONARIA",
+            "TERAPIA INTENSIVA CARDIOVASCULAR",
+            "HEMODINÁMICA", 
+            "QUIRÓFANO",
+            "HOSPITALIZACIÓN OCTAVO PISO",
+            "HOSPITALIZACIÓN NOVENO PISO"
+        ],
+        "🫀 CARDIOLOGÍA ESPECIALIZADA": [
+            "CARDIOLOGÍA ADULTOS III",
+            "CARDIOLOGÍA ADULTOS VII", 
+            "CARDIONEUMOLOGÍA",
+            "CARDIOLOGÍA PEDIÁTRICA"
+        ],
+        "🧪 SERVICIOS ESPECIALIZADOS": [
+            "NEFROLOGÍA",
+            "BANCO DE SANGRE",
+            "VENTILOTERAPIA",
+            "CLÍNICA DE CUIDADOS PALIATIVOS/ APOYO VITAL"
+        ],
+        "🏢 SERVICIOS GENERALES Y APOYO": [
+            "CENTRAL DE EQUIPO Y ESTERILIZACIÓN",
+            "COMITÉ DE CONTROL DE INFECCIONES ASOCIADAS A LA ATENCIÓN DE LA SALUD",
+            "CONSULTA EXTERNA",
+            "CLÍNICAS DE DIAGNÓSTICO Y TRATAMIENTO",
+            "DIRECCIÓN DE ENFERMERÍA Y DEPARTAMENTOS"
+        ]
+    }
 
 def filtrar_enfermeras_por_turno_servicio(enfermeras_df, user_turno, user_servicio, fecha_turno_usuario=None):
     """Filtra enfermeras por turno del usuario, fecha_turno y puestos válidos, NO por servicio"""
@@ -992,8 +1026,6 @@ def filtrar_enfermeras_por_turno_servicio(enfermeras_df, user_turno, user_servic
             st.info(f"📊 Enfermeras después de filtrar por turno: {len(enfermeras_filtradas)}")
 
     return enfermeras_filtradas
-
-
 
 def crear_estructura_habitaciones(user_servicio, pacientes_df, enfermeras_df, user_info, fecha_turno_usuario=None):
     """Crea la estructura completa de habitaciones con validación de datos y filtrado por turno y fecha_turno"""
@@ -1133,7 +1165,6 @@ def crear_estructura_habitaciones(user_servicio, pacientes_df, enfermeras_df, us
 
     return habitaciones
 
-
 def mover_personal(servicio_destino, user_info):
     """Mueve el personal seleccionado al servicio destino con registro de seguridad"""
     origen = st.session_state.seleccion["servicio"]
@@ -1174,7 +1205,6 @@ def mover_personal(servicio_destino, user_info):
             st.rerun()
         else:
             st.error(f"No se encontró a {nombre} en {origen}")
-
 
 def guardar_log_transferencias(user_info):
     """Guarda el log de transferencias en el servidor SFTP, añadiendo al archivo existente"""
@@ -1355,7 +1385,6 @@ def guardar_log_transferencias(user_info):
         st.info("👆 Haz clic en el botón para confirmar y guardar los movimientos")
         return False
 
-
 def listar_logs_disponibles(user_info):
     """Lista los archivos de log disponibles para este usuario con mejor manejo de errores"""
     try:
@@ -1365,43 +1394,80 @@ def listar_logs_disponibles(user_info):
             return []
 
         sftp = ssh.open_sftp()
+        
+        # Buscar logs en DOS ubicaciones:
+        # 1. En la carpeta específica del usuario
         user_log_dir = os.path.join(CONFIG.REMOTE['DIR'], "user_logs_supervision", user_info['numero_economico'])
+        
+        # 2. En la carpeta principal (logs de jornadas anteriores movidos)
+        main_log_dir = os.path.join(CONFIG.REMOTE['DIR'], "user_logs_supervision")
+
+        all_files = []
 
         try:
-            # Verificar si existe el directorio del usuario
+            # Buscar en la carpeta del usuario
             try:
                 sftp.stat(user_log_dir)
-                files = sftp.listdir(user_log_dir)
-
+                user_files = sftp.listdir(user_log_dir)
+                # Agregar path completo para identificar origen
+                for f in user_files:
+                    all_files.append({
+                        'name': f,
+                        'path': os.path.join("user_logs_supervision", user_info['numero_economico'], f),
+                        'location': 'user_dir'
+                    })
+                
                 if CONFIG.DEBUG_MODE:
-                    st.info(f"📁 Directorio encontrado: {user_log_dir}")
-                    st.info(f"📊 Archivos encontrados: {len(files)}")
-                    for f in files:
-                        st.info(f"   - {f}")
+                    st.info(f"📁 Directorio de usuario encontrado: {user_log_dir}")
+                    st.info(f"📊 Archivos en directorio usuario: {len(user_files)}")
 
             except FileNotFoundError:
                 if CONFIG.DEBUG_MODE:
-                    st.info(f"📁 Directorio no encontrado: {user_log_dir}")
-                files = []
+                    st.info(f"📁 Directorio de usuario no encontrado: {user_log_dir}")
+
+            # Buscar en la carpeta principal
+            try:
+                sftp.stat(main_log_dir)
+                main_files = sftp.listdir(main_log_dir)
+                # Filtrar solo los archivos que pertenecen a este usuario
+                user_pattern = f"_{user_info['numero_economico']}_"
+                for f in main_files:
+                    if user_pattern in f:
+                        all_files.append({
+                            'name': f,
+                            'path': os.path.join("user_logs_supervision", f),
+                            'location': 'main_dir'
+                        })
+                
+                if CONFIG.DEBUG_MODE:
+                    st.info(f"📁 Directorio principal encontrado: {main_log_dir}")
+                    st.info(f"📊 Archivos del usuario en directorio principal: {len([f for f in main_files if user_pattern in f])}")
+
+            except FileNotFoundError:
+                if CONFIG.DEBUG_MODE:
+                    st.info(f"📁 Directorio principal no encontrado: {main_log_dir}")
 
         except Exception as e:
             if CONFIG.DEBUG_MODE:
-                st.error(f"Error accediendo al directorio: {str(e)}")
-            files = []
+                st.error(f"Error accediendo a directorios: {str(e)}")
         finally:
             sftp.close()
             ssh.close()
 
         # Filtrar logs de movimientos del usuario específico
-        movimientos_pattern = ".movimientos.csv"
-        user_logs = [f for f in files if movimientos_pattern in f]
+        movimientos_pattern = "_movimientos.csv"
+        user_logs = [f for f in all_files if movimientos_pattern in f['name']]
 
         if CONFIG.DEBUG_MODE:
             st.info(f"📊 Logs de movimientos encontrados: {len(user_logs)}")
             for log in user_logs:
-                st.info(f"   - {log}")
+                st.info(f"   - {log['name']} ({log['location']})")
 
-        return sorted(user_logs, reverse=True)
+        # Ordenar por nombre (que incluye timestamp) de más reciente a más antiguo
+        user_logs.sort(key=lambda x: x['name'], reverse=True)
+        
+        # Devolver solo los nombres para el selectbox
+        return [log['name'] for log in user_logs]
 
     except Exception as e:
         if CONFIG.DEBUG_MODE:
@@ -1411,9 +1477,22 @@ def listar_logs_disponibles(user_info):
 def obtener_contenido_log(archivo_log, user_info):
     """Obtiene el contenido de un archivo de log específico"""
     try:
-        user_log_path = os.path.join("user_logs_supervision", user_info['numero_economico'], archivo_log)
-        contenido = SSHManager.get_remote_file(user_log_path, user_info=user_info)
-        return contenido
+        # Buscar el archivo en ambas ubicaciones
+        locations_to_try = [
+            os.path.join("user_logs_supervision", user_info['numero_economico'], archivo_log),
+            os.path.join("user_logs_supervision", archivo_log)
+        ]
+        
+        for log_path in locations_to_try:
+            contenido = SSHManager.get_remote_file(log_path, user_info=user_info)
+            if contenido is not None:
+                if CONFIG.DEBUG_MODE:
+                    st.info(f"✅ Log encontrado en: {log_path}")
+                return contenido
+        
+        st.error(f"❌ No se pudo encontrar el archivo {archivo_log} en ninguna ubicación")
+        return None
+        
     except Exception as e:
         st.error(f"Error leyendo archivo de log: {str(e)}")
         return None
@@ -1436,10 +1515,27 @@ def mostrar_contenido_log_tabular(contenido, nombre_archivo):
         # Mostrar el dataframe sin estadísticas
         st.dataframe(df, use_container_width=True, height=height)
 
+        # Agregar botón de descarga
+        st.download_button(
+            label="📥 Descargar CSV",
+            data=contenido,
+            file_name=nombre_archivo,
+            mime="text/csv",
+            use_container_width=True
+        )
+
     except Exception as e:
         st.error(f"Error procesando el archivo de log: {str(e)}")
         st.text_area("Contenido del log (vista raw):", contenido, height=300)
-
+        
+        # Botón de descarga para contenido raw
+        st.download_button(
+            label="📥 Descargar Log",
+            data=contenido,
+            file_name=nombre_archivo,
+            mime="text/plain",
+            use_container_width=True
+        )
 
 def reconstruir_desde_log(user_servicio, log_filename, user_info):
     """Reconstruye el estado actual aplicando las transferencias del log sobre la distribución original, filtrando por turno"""
@@ -1594,8 +1690,7 @@ def reconstruir_desde_log(user_servicio, log_filename, user_info):
                     st.write(f"  - {p['nombre']} ({p['numero_economico']}) - {p['rol']}")
 
     # Cargar el archivo log
-    user_log_path = os.path.join("user_logs_supervision", user_info['numero_economico'], log_filename)
-    log_content = SSHManager.get_remote_file(user_log_path, user_info=user_info)
+    log_content = obtener_contenido_log(log_filename, user_info)
     if not log_content:
         st.error("No se pudo cargar el archivo log")
         st.session_state.servicios = servicios
@@ -1839,6 +1934,32 @@ def load_custom_styles():
             background-color: #e9ecef;
             border-color: #999;
         }
+        /* Estilos para pestañas personalizadas */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            height: 50px;
+            white-space: pre-wrap;
+            background-color: #f0f2f6;
+            border-radius: 8px 8px 0px 0px;
+            gap: 1px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            font-weight: bold;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #4a8cff;
+            color: white;
+        }
+        .tab-badge {
+            background-color: #ff4b4b;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 0.7em;
+            margin-left: 5px;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -1891,7 +2012,7 @@ def show_role_legend():
     """, unsafe_allow_html=True)
 
 def show_main_content():
-    """Muestra el contenido principal de la aplicación"""
+    """Muestra el contenido principal de la aplicación con pestañas"""
 
     # Mostrar leyenda de roles en la parte superior
     show_role_legend()
@@ -1919,79 +2040,95 @@ def show_main_content():
         </div>
     """, unsafe_allow_html=True)
 
-    # Mostrar servicios en columnas - TODOS LOS SERVICIOS, INCLUYENDO VACÍOS
-    cols = st.columns(3)
+    # Obtener servicios organizados por pestañas
+    servicios_por_pestana = obtener_servicios_por_pestana()
     
-    # Obtener todos los servicios que deben mostrarse
-    servicios_completos = obtener_servicios()
+    # Crear pestañas
+    tab_names = list(servicios_por_pestana.keys())
     
-    for i, servicio in enumerate(servicios_completos):
-        with cols[i % 3]:
-            # Verificar si el servicio tiene enfermeras
-            profesionales = st.session_state.servicios.get(servicio, [])
+    # Añadir badges con conteo de servicios por pestaña
+    tab_labels = []
+    for tab_name in tab_names:
+        count = len(servicios_por_pestana[tab_name])
+        tab_labels.append(f"{tab_name} ({count})")
+    
+    tabs = st.tabs(tab_labels)
+    
+    # Mostrar contenido para cada pestaña
+    for i, (tab_name, servicios_en_pestana) in enumerate(servicios_por_pestana.items()):
+        with tabs[i]:
+            st.markdown(f"### {tab_name}")
             
-            if profesionales:
-                # Servicio con enfermeras - mostrar normalmente
-                st.markdown(f"### {servicio}")
-                
-                for idx, p in enumerate(profesionales):
-                    selected = (st.session_state.seleccion["nombre"] == p["nombre"] and
-                              st.session_state.seleccion["servicio"] == servicio)
-
-                    # Contenedor clickeable para cada profesional
-                    container = st.container()
-                    with container:
-                        col1, col2 = st.columns([4, 1])
-                        with col1:
-                            st.markdown(f'<div class="profesional-name">{p["nombre"]}</div>', unsafe_allow_html=True)
-                        with col2:
-                            st.markdown(f'<div class="role-badge" style="background-color: {p["color"]};"></div>', unsafe_allow_html=True)
-
-                    # Crear clave única que incluya servicio, número económico e índice
-                    key_unique = f"btn_{servicio}_{p['numero_economico']}_{idx}"
+            # Mostrar servicios en columnas (3 columnas por pestaña)
+            cols = st.columns(3)
+            
+            for j, servicio in enumerate(servicios_en_pestana):
+                with cols[j % 3]:
+                    # Verificar si el servicio tiene enfermeras
+                    profesionales = st.session_state.servicios.get(servicio, [])
                     
-                    # Manejar el clic en el contenedor
-                    if container.button("", key=key_unique, help=p['nombre']):
-                        if selected:
-                            st.session_state.seleccion = {"nombre": None, "servicio": None}
-                        else:
-                            st.session_state.seleccion = {"nombre": p["nombre"], "servicio": servicio}
-                        st.rerun()
+                    if profesionales:
+                        # Servicio con enfermeras - mostrar normalmente
+                        st.markdown(f"#### {servicio}")
+                        
+                        for idx, p in enumerate(profesionales):
+                            selected = (st.session_state.seleccion["nombre"] == p["nombre"] and
+                                      st.session_state.seleccion["servicio"] == servicio)
 
-                    # Aplicar estilo de selección
-                    if selected:
-                        st.markdown(
-                            f"""
-                            <style>
-                                div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="element-container"] > div[data-testid="stMarkdown"] > div[data-testid="stMarkdownContainer"] > div {{
-                                    background-color: #fff8e1 !important;
-                                    border: 2px solid #ffd54f !important;
-                                }}
-                            </style>
-                            """,
-                            unsafe_allow_html=True
-                        )
-            else:
-                # Servicio vacío - mostrar con estilo especial
-                st.markdown(f"""
-                    <div class="servicio-vacio">
-                        <h4>{servicio}</h4>
-                        <p>🔄 Sin enfermeras asignadas</p>
-                        <small>Puedes mover personal aquí</small>
-                    </div>
-                """, unsafe_allow_html=True)
+                            # Contenedor clickeable para cada profesional
+                            container = st.container()
+                            with container:
+                                col1, col2 = st.columns([4, 1])
+                                with col1:
+                                    st.markdown(f'<div class="profesional-name">{p["nombre"]}</div>', unsafe_allow_html=True)
+                                with col2:
+                                    st.markdown(f'<div class="role-badge" style="background-color: {p["color"]};"></div>', unsafe_allow_html=True)
 
-            # Botón para mover al servicio actual (si hay una selección activa y no es el mismo servicio)
-            if (st.session_state.seleccion["nombre"] and
-                st.session_state.seleccion["servicio"] and
-                servicio != st.session_state.seleccion["servicio"]):
+                            # Crear clave única que incluya servicio, número económico e índice
+                            key_unique = f"btn_{servicio}_{p['numero_economico']}_{idx}"
+                            
+                            # Manejar el clic en el contenedor
+                            if container.button("", key=key_unique, help=p['nombre']):
+                                if selected:
+                                    st.session_state.seleccion = {"nombre": None, "servicio": None}
+                                else:
+                                    st.session_state.seleccion = {"nombre": p["nombre"], "servicio": servicio}
+                                st.rerun()
 
-                # Crear clave única para el botón de mover
-                mover_key = f"mover_{servicio}_{st.session_state.seleccion['nombre'].replace(' ', '_')}"
-                
-                if st.button(f"Mover {st.session_state.seleccion['nombre'].split()[0]} aquí",
-                           key=mover_key, use_container_width=True):
-                    mover_personal(servicio, st.session_state.user_info)
+                            # Aplicar estilo de selección
+                            if selected:
+                                st.markdown(
+                                    f"""
+                                    <style>
+                                        div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="element-container"] > div[data-testid="stMarkdown"] > div[data-testid="stMarkdownContainer"] > div {{
+                                            background-color: #fff8e1 !important;
+                                            border: 2px solid #ffd54f !important;
+                                        }}
+                                    </style>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                    else:
+                        # Servicio vacío - mostrar con estilo especial
+                        st.markdown(f"""
+                            <div class="servicio-vacio">
+                                <h4>{servicio}</h4>
+                                <p>🔄 Sin enfermeras asignadas</p>
+                                <small>Puedes mover personal aquí</small>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                    # Botón para mover al servicio actual (si hay una selección activa y no es el mismo servicio)
+                    if (st.session_state.seleccion["nombre"] and
+                        st.session_state.seleccion["servicio"] and
+                        servicio != st.session_state.seleccion["servicio"]):
+
+                        # Crear clave única para el botón de mover
+                        mover_key = f"mover_{servicio}_{st.session_state.seleccion['nombre'].replace(' ', '_')}"
+                        
+                        if st.button(f"Mover {st.session_state.seleccion['nombre'].split()[0]} aquí",
+                                   key=mover_key, use_container_width=True):
+                            mover_personal(servicio, st.session_state.user_info)
 
 
 def show_summary(user_info):
@@ -2351,7 +2488,6 @@ def show_configuration_pdf_button(user_info):
                 else:
                     st.sidebar.error("❌ Error al generar el PDF")
 
-
 def initialize_session_state(user_servicio, user_info):
     """Inicializa el estado de la sesión con medidas de seguridad y filtrando por turno laboral y fecha_turno"""
     operation_id = f"init_session_{uuid.uuid4()}"
@@ -2469,7 +2605,7 @@ def initialize_session_state(user_servicio, user_info):
                 st.write("Enfermeras filtradas (primeras 5):")
                 st.write(enfermeras_validas.head())
 
-            # OBTENER LA LISTA COMPLETA DE SERVICIOS (SIEMPRE MOSTRAR TODOS)
+            # OBTENER LA LISTA COMPLETA DE 20 SERVICIOS
             servicios_completos = obtener_servicios()
 
             # Crear estructura de servicios con datos reales - INCLUYENDO SERVICIOS VACÍOS
@@ -2562,7 +2698,6 @@ def initialize_session_state(user_servicio, user_info):
         st.error(f"Error inicializando sesión: {str(e)}")
         log_security_event("session_init_error", user_info, f"Error inicializando sesión: {str(e)}")
         activity_monitor.end_operation(operation_id, "failed")
-
 
 def main():
     """Función principal con medidas de seguridad integradas"""
