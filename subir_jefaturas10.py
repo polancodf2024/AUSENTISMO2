@@ -74,7 +74,7 @@ class Config:
             "HEMODINÁMICA",
             "TERAPIA INTENSIVA CARDIOVASCULAR",
             "QUIRÓFANO",
-            "CARDIOLOGÍA PEDÍATRICA",
+            "CARDIOLOGÍA PEDIÁTRICA",
             "CARDIOLOGÍA ADULTOS VII",
             "HOSPITALIZACIÓN OCTAVO PISO",
             "HOSPITALIZACIÓN NOVENO PISO",
@@ -371,11 +371,10 @@ def cargar_archivo_claves():
     if content is None:
         return None
 
-    # Definir estructura completa esperada según el layout proporcionado
+    # Definir estructura completa esperada
     columnas_completas = [
         'numero_economico', 'puesto', 'nombre_completo', 'servicio', 
-        'turno_laboral', 'password', 'correo_electronico', 'suplencia',
-        'numero_evento', 'numero_consecutivo'
+        'turno_laboral', 'password', 'correo_electronico', 'suplencia'
     ]
 
     if content.strip() == "":
@@ -388,9 +387,7 @@ def cargar_archivo_claves():
         # Asegurar que todas las columnas existan
         for col in columnas_completas:
             if col not in df.columns:
-                if col in ['numero_consecutivo', 'numero_evento']:
-                    df[col] = 1  # Valores por defecto según requerimiento
-                elif col == 'suplencia':
+                if col == 'suplencia':
                     df[col] = "NO"  # Valor por defecto para suplencia
                 else:
                     df[col] = ""  # Valores por defecto para campos de texto
@@ -438,16 +435,6 @@ def cargar_archivo_claves():
         else:
             df['suplencia'] = "NO"
 
-        if 'numero_consecutivo' in df.columns:
-            df['numero_consecutivo'] = df['numero_consecutivo'].fillna(1).astype(int)
-        else:
-            df['numero_consecutivo'] = 1
-
-        if 'numero_evento' in df.columns:
-            df['numero_evento'] = df['numero_evento'].fillna(1).astype(int)
-        else:
-            df['numero_evento'] = 1
-
         return df
 
     except Exception as e:
@@ -461,7 +448,7 @@ def cargar_archivo_asistencia():
     if content is None:
         return None
 
-    # Definir estructura completa esperada según el layout proporcionado
+    # Definir estructura completa esperada
     columnas_completas = [
         'fecha', 'fecha_turno', 'numero_economico', 'puesto', 'nombre_completo', 
         'servicio', 'turno_laboral', 'hora_entrada', 'incidencias', 'suplencia'
@@ -835,9 +822,7 @@ def mostrar_creacion_claves(user_info):
                 'turno_laboral': turno_laboral,
                 'password': password,
                 'correo_electronico': correo_electronico,
-                'suplencia': suplencia,
-                'numero_evento': 1,
-                'numero_consecutivo': 1
+                'suplencia': suplencia
             }
 
             # Agregar a DataFrame
