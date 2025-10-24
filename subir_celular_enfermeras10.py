@@ -395,7 +395,7 @@ class SistemaEnfermeria:
             return None
 
     def verificar_password_remoto(self, password):
-        """Verifica si la contraseña ya existe en el archivo remoto"""
+        """Verifica si la contraseña ya existe en el archivo remoto - MEJORADA"""
         ssh = self.conectar_ssh()
         if not ssh:
             return False, "No se pudo conectar al servidor para verificar la contraseña"
@@ -415,18 +415,22 @@ class SistemaEnfermeria:
             ssh.close()
             
             if not contenido.strip():
-                return False, "Contraseña disponible"
+                return False, "Contraseña disponible (archivo remoto vacío)"
             
             # Leer el archivo CSV y buscar la contraseña
-            df = pd.read_csv(io.StringIO(contenido))
-            
-            # Verificar si la contraseña ya existe (columna 6, índice 5)
-            if not df.empty and len(df.columns) > 5:
-                if password in df.iloc[:, 5].values:
-                    return True, "Esta contraseña ya está registrada en el sistema remoto"
-            
-            return False, "Contraseña disponible"
-            
+            try:
+                df = pd.read_csv(io.StringIO(contenido))
+                
+                # Verificar si la contraseña ya existe (columna 6, índice 5)
+                if not df.empty and len(df.columns) > 5:
+                    if password in df.iloc[:, 5].values:
+                        return True, "Esta contraseña ya está registrada en el sistema remoto"
+                
+                return False, "Contraseña disponible"
+                
+            except Exception as e:
+                return False, f"Error al leer archivo remoto: {str(e)}"
+                
         except Exception as e:
             try:
                 sftp.close()
@@ -437,6 +441,59 @@ class SistemaEnfermeria:
             except:
                 pass
             return False, f"Error al verificar contraseña: {str(e)}"
+
+    def validar_numero_economico(self, numero):
+        """Valida que el número económico sea único tanto local como remotamente - CORREGIDA"""
+        # Verificar localmente
+        if numero in self.usuarios:
+            return False
+        
+        # Verificar remotamente en aus_creacion_enfermeras2.csv
+        ssh = self.conectar_ssh()
+        if not ssh:
+            # Si no puede conectar, permitir el registro solo local
+            return True
+        
+        try:
+            sftp = ssh.open_sftp()
+            remote_file_path = f"{self.remote_config['remote_dir']}/{self.remote_config['file_creacion_enfermeras2']}"
+            
+            # Verificar si el archivo existe
+            try:
+                with sftp.file(remote_file_path, 'r') as archivo_remoto:
+                    contenido = archivo_remoto.read().decode('utf-8')
+            except:
+                contenido = ""
+            
+            sftp.close()
+            ssh.close()
+            
+            if not contenido.strip():
+                return True  # Archivo vacío, número disponible
+            
+            # Leer el archivo CSV y buscar el número económico
+            df = pd.read_csv(io.StringIO(contenido))
+            
+            # Verificar si el número económico ya existe (columna 1, índice 0)
+            if not df.empty and len(df.columns) > 0:
+                # Convertir a string para comparación consistente
+                numero_str = str(numero)
+                if numero_str in df.iloc[:, 0].astype(str).values:
+                    return False  # Número ya existe
+            
+            return True  # Número disponible
+            
+        except Exception as e:
+            try:
+                sftp.close()
+            except:
+                pass
+            try:
+                ssh.close()
+            except:
+                pass
+            # En caso de error, permitir registro solo local
+            return True
 
     def agregar_registro_remoto(self, datos_usuario):
         """Agrega un registro al archivo remoto aus_creacion_enfermeras2.csv con los nuevos campos"""
@@ -847,10 +904,6 @@ class SistemaEnfermeria:
         </div>
         """, unsafe_allow_html=True)
 
-    def validar_numero_economico(self, numero):
-        """Valida que el número económico sea único"""
-        return numero not in self.usuarios
-
     def buscar_usuario_por_password(self, password):
         """Buscar usuario por contraseña (ahora única)"""
         for numero_economico, usuario in self.usuarios.items():
@@ -1172,12 +1225,16 @@ class SistemaEnfermeria:
                     errores = []
                     campos_con_error = []
                     
+                    # VERIFICACIÓN MEJORADA DEL NÚMERO ECONÓMICO
                     if not numero_economico:
                         errores.append("El número económico es obligatorio.")
                         campos_con_error.append('numero_economico')
-                    elif not self.validar_numero_economico(numero_economico):
-                        errores.append("Este número económico ya está registrado. Intente con otro.")
-                        campos_con_error.append('numero_economico')
+                    else:
+                        with st.spinner("🔍 Verificando número económico..."):
+                            numero_valido = self.validar_numero_economico(numero_economico)
+                        if not numero_valido:
+                            errores.append("Este número económico ya está registrado en el sistema. Intente con otro.")
+                            campos_con_error.append('numero_economico')
                     
                     if not nombre_completo:
                         errores.append("El nombre completo es obligatorio.")
