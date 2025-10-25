@@ -283,7 +283,7 @@ class SistemaEnfermeria:
             "HEMODINÁMICA",
             "TERAPIA INTENSIVA CARDIOVASCULAR",
             "QUIRÓFANO",
-            "CARDIOLOGÍA PEDÍATRICA",
+            "CARDIOLOGÍA PEDIÁTRICA",
             "CARDIOLOGÍA ADULTOS VII",
             "HOSPITALIZACIÓN OCTAVO PISO",
             "HOSPITALIZACIÓN NOVENO PISO",
@@ -603,7 +603,7 @@ class SistemaEnfermeria:
             return None
 
     def mover_registros_anteriores_historico(self, numero_economico):
-        """Mueve TODOS los registros anteriores del usuario al histórico - CORREGIDO CON CONVERSIÓN DE TIPOS"""
+        """Mueve TODOS los registros anteriores del usuario al histórico - CORREGIDO COMPLETAMENTE"""
         ssh = self.conectar_ssh()
         if not ssh:
             st.error("❌ No se pudo conectar al servidor para mover registros al histórico")
@@ -675,10 +675,20 @@ class SistemaEnfermeria:
                     if 'numero_economico' in df_historico.columns:
                         df_historico['numero_economico'] = df_historico['numero_economico'].astype(str)
                 else:
-                    df_historico = pd.DataFrame()
+                    # Si no existe histórico, crear uno con las mismas columnas que asistencia
+                    df_historico = pd.DataFrame(columns=df_asistencia.columns)
+                
+                # CORRECCIÓN CRÍTICA: Asegurar que los registros a mover tengan la misma estructura
+                # Mantener solo las columnas que existen en ambos DataFrames
+                columnas_comunes = [col for col in registros_usuario.columns if col in df_historico.columns]
+                if not columnas_comunes:
+                    # Si no hay columnas comunes, usar las del histórico
+                    columnas_comunes = df_historico.columns.tolist()
+                
+                registros_a_mover = registros_usuario[columnas_comunes].copy()
                 
                 # Agregar TODOS los registros del usuario al histórico
-                df_historico = pd.concat([df_historico, registros_usuario], ignore_index=True)
+                df_historico = pd.concat([df_historico, registros_a_mover], ignore_index=True)
                 
                 # Eliminar TODOS los registros del usuario del archivo de asistencia
                 df_asistencia = df_asistencia[df_asistencia['numero_economico'] != numero_economico_str]
@@ -716,7 +726,7 @@ class SistemaEnfermeria:
             return False
 
     def agregar_asistencia_remota(self, datos_asistencia):
-        """Agrega un registro de asistencia al archivo remoto con gestión de histórico - CORREGIDO CON CONVERSIÓN DE TIPOS"""
+        """Agrega un registro de asistencia al archivo remoto con gestión de histórico - CORREGIDO"""
         ssh = self.conectar_ssh()
         if not ssh:
             st.warning("⚠️ No se pudo conectar al servidor remoto. El registro de asistencia se guardó solo localmente.")
@@ -764,6 +774,10 @@ class SistemaEnfermeria:
             
             # CORRECCIÓN: Asegurar que el nuevo registro también tenga el tipo correcto
             datos_asistencia['numero_economico'] = str(datos_asistencia['numero_economico'])
+            
+            # Si el DataFrame de asistencia está vacío, establecer las columnas
+            if df_asistencia.empty:
+                df_asistencia = pd.DataFrame(columns=datos_asistencia.keys())
             
             # Agregar el nuevo registro al archivo de asistencia
             nuevo_registro_df = pd.DataFrame([datos_asistencia])
