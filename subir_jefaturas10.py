@@ -161,11 +161,11 @@ def constant_time_compare(val1, val2):
     return result == 0
 
 def authenticate_user():
-    """Autentica al usuario con medidas de seguridad"""
+    """Autentica al usuario con credenciales fijas"""
     st.title("🔐 Sistema de Administración - Archivo de Claves")
 
     if 'auth_stage' not in st.session_state:
-        st.session_state.auth_stage = 'numero_economico'
+        st.session_state.auth_stage = 'username'
         st.session_state.auth_attempts = 0
         st.session_state.last_auth_attempt = 0
 
@@ -176,70 +176,36 @@ def authenticate_user():
         st.error("🔒 Demasiados intentos fallidos. Espere 5 minutos antes de intentar nuevamente.")
         return False, None
 
-    if st.session_state.auth_stage == 'numero_economico':
-        with st.form("auth_form_numero"):
-            numero_economico = st.text_input("Número Económico", max_chars=10)
-            numero_economico = sanitize_input(numero_economico)
+    if st.session_state.auth_stage == 'username':
+        with st.form("auth_form_username"):
+            username = st.text_input("Usuario", max_chars=20)
+            username = sanitize_input(username)
 
-            submitted = st.form_submit_button("Verificar")
+            submitted = st.form_submit_button("Continuar")
 
             if submitted:
                 st.session_state.last_auth_attempt = current_time
                 st.session_state.auth_attempts += 1
 
-                if not numero_economico:
-                    st.error("Por favor ingrese su número económico")
+                if not username:
+                    st.error("Por favor ingrese su usuario")
                     return False, None
 
-                st.session_state.numero_economico = numero_economico
-                numero_clean = numero_economico.strip()
-
-                # Cargar archivo de claves
-                claves_df = cargar_archivo_claves()
-                if claves_df is None:
-                    st.error("No se pudieron cargar los archivos necesarios")
+                # Verificar usuario
+                if username != "administracion":
+                    st.error("❌ Usuario incorrecto")
                     return False, None
 
-                # Buscar usuario en archivo de claves
-                user_clave = claves_df[claves_df['numero_economico'] == numero_clean]
-                if user_clave.empty:
-                    st.error("❌ Número económico no registrado")
-                    return False, None
-
-                # Obtener datos del usuario
-                puesto = user_clave.iloc[0]['puesto'].strip().lower() if 'puesto' in user_clave.columns and not pd.isna(user_clave.iloc[0]['puesto']) else ""
-                nombre_completo = user_clave.iloc[0]['nombre_completo'].strip() if 'nombre_completo' in user_clave.columns and not pd.isna(user_clave.iloc[0]['nombre_completo']) else ""
-                turno_laboral = user_clave.iloc[0]['turno_laboral'].strip() if 'turno_laboral' in user_clave.columns and not pd.isna(user_clave.iloc[0]['turno_laboral']) else ""
-
-                # Verificar que sea administración
-                if puesto != "administración":
-                    st.error("❌ Solo personal con puesto 'administración' puede acceder al sistema")
-                    return False, None
-
+                st.session_state.username = username
                 st.session_state.auth_stage = 'password'
-                st.session_state.user_data = {
-                    'numero_economico': numero_clean,
-                    'puesto': puesto,
-                    'nombre_completo': nombre_completo,
-                    'turno_laboral': turno_laboral
-                }
-
-                if CONFIG.DEBUG_MODE:
-                    st.write(f"DEBUG: Datos capturados - Nombre: '{nombre_completo}', Puesto: '{puesto}', Turno: '{turno_laboral}'")
-
                 st.rerun()
 
     elif st.session_state.auth_stage == 'password':
         with st.form("auth_form_password"):
-            user_data = st.session_state.user_data
-            st.info(f"👤 Usuario: {user_data['numero_economico']}")
-            st.info(f"📝 Nombre: {user_data['nombre_completo']}")
-            st.info(f"👔 Puesto: {user_data['puesto']}")
-            if user_data.get('turno_laboral'):
-                st.info(f"🕒 Turno: {user_data['turno_laboral']}")
-
+            st.info(f"👤 Usuario: administracion")
+            
             password = st.text_input("Contraseña", type="password")
-            confirm = st.form_submit_button("Validar Contraseña")
+            confirm = st.form_submit_button("Iniciar Sesión")
 
             if confirm:
                 st.session_state.last_auth_attempt = current_time
@@ -249,23 +215,8 @@ def authenticate_user():
                     st.error("❌ Por favor ingrese su contraseña")
                     return False, None
 
-                claves_df = cargar_archivo_claves()
-                if claves_df is None:
-                    st.error("No se pudo cargar el archivo de claves")
-                    return False, None
-
-                # Buscar usuario en archivo de claves
-                user_clave = claves_df[claves_df['numero_economico'] == st.session_state.numero_economico]
-                if user_clave.empty:
-                    st.error("❌ Usuario no encontrado en archivo de claves")
-                    return False, None
-
                 # Verificar contraseña
-                if 'password' not in user_clave.columns:
-                    st.error("❌ Error en la estructura del archivo de claves")
-                    return False, None
-
-                if not constant_time_compare(str(user_clave.iloc[0]['password']), password):
+                if password != "gabylira2026":
                     st.error("❌ Contraseña incorrecta")
                     return False, None
 
@@ -273,6 +224,15 @@ def authenticate_user():
                 st.session_state.auth_attempts = 0
                 st.success("✅ Autenticación exitosa")
                 st.session_state.auth_stage = 'authenticated'
+                
+                # Crear datos de usuario simulados
+                st.session_state.user_data = {
+                    'numero_economico': 'admin001',
+                    'puesto': 'administración',
+                    'nombre_completo': 'Usuario Administrador',
+                    'turno_laboral': 'Administrativo'
+                }
+                
                 st.rerun()
 
     elif st.session_state.auth_stage == 'authenticated':
