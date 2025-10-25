@@ -572,6 +572,12 @@ def proceso_inicio_sesion():
     try:
         st.info("🔄 **Ejecutando proceso automático de inicio de sesión...**")
         
+        # Obtener nombres de archivos desde secrets.toml
+        file_creacion_pacientes2 = st.secrets["file_creacion_pacientes2"]
+        file_asistencia_pacientes2 = st.secrets["file_asistencia_pacientes2"]
+        file_historico_creacion_pacientes2 = st.secrets["file_historico_creacion_pacientes2"]
+        file_historico_asistencia_pacientes2 = st.secrets["file_historico_asistencia_pacientes2"]
+        
         # 1. BORRAR ARCHIVOS INPUT
         st.subheader("🧹 Paso 1: Limpieza de archivos input")
         archivos_input = listar_archivos_remotos("input_")
@@ -595,12 +601,12 @@ def proceso_inicio_sesion():
         st.subheader("📚 Paso 2: Respaldo histórico")
         
         # 2.1 Respaldo de creación
-        df_creacion_actual, success = leer_archivo_remoto("aus_creacion_pacientes2.csv")
+        df_creacion_actual, success = leer_archivo_remoto(file_creacion_pacientes2)
         if success and df_creacion_actual is not None and len(df_creacion_actual) > 0:
             st.info(f"📊 **Registros actuales en creación:** {len(df_creacion_actual)}")
             success = adicionar_a_archivo_historico(
                 df_creacion_actual, 
-                "aus_historico_creacion_pacientes2.csv", 
+                file_historico_creacion_pacientes2, 
                 "creación"
             )
             if success:
@@ -612,12 +618,12 @@ def proceso_inicio_sesion():
             st.info("ℹ️ No hay registros actuales en creación para respaldar")
         
         # 2.2 Respaldo de asistencia
-        df_asistencia_actual, success = leer_archivo_remoto("aus_asistencia_pacientes2.csv")
+        df_asistencia_actual, success = leer_archivo_remoto(file_asistencia_pacientes2)
         if success and df_asistencia_actual is not None and len(df_asistencia_actual) > 0:
             st.info(f"📊 **Registros actuales en asistencia:** {len(df_asistencia_actual)}")
             success = adicionar_a_archivo_historico(
                 df_asistencia_actual, 
-                "aus_historico_asistencia_pacientes2.csv", 
+                file_historico_asistencia_pacientes2, 
                 "asistencia"
             )
             if success:
@@ -632,14 +638,14 @@ def proceso_inicio_sesion():
         st.subheader("🧹 Paso 3: Limpieza de archivos principales")
         
         # 3.1 Limpiar archivo de creación
-        if limpiar_contenido_archivo_remoto("aus_creacion_pacientes2.csv"):
+        if limpiar_contenido_archivo_remoto(file_creacion_pacientes2):
             st.success("✅ Archivo de creación limpiado exitosamente")
         else:
             st.error("❌ Error limpiando archivo de creación")
             return False
         
         # 3.2 Limpiar archivo de asistencia
-        if limpiar_contenido_archivo_remoto("aus_asistencia_pacientes2.csv"):
+        if limpiar_contenido_archivo_remoto(file_asistencia_pacientes2):
             st.success("✅ Archivo de asistencia limpiado exitosamente")
         else:
             st.error("❌ Error limpiando archivo de asistencia")
@@ -1129,7 +1135,7 @@ def crear_archivo_asistencia_desde_input(servicio_nombre):
         # ADICIONAR al archivo principal de asistencia
         success = adicionar_a_archivo_principal(
             asistencia_df, 
-            "aus_asistencia_pacientes2.csv", 
+            st.secrets["file_asistencia_pacientes2"], 
             "asistencia"
         )
         
@@ -1383,7 +1389,7 @@ def main():
         col_gen1, col_gen2 = st.columns(2)
         
         with col_gen1:
-            if st.button("📄 ADICIONAR a aus_creacion_pacientes2.csv", type="primary", key="adicionar_creacion", use_container_width=True):
+            if st.button("📄 ADICIONAR a creacion_pacientes2", type="primary", key="adicionar_creacion", use_container_width=True):
                 with st.spinner("Adicionando registros a creación..."):
                     # Leer archivo input
                     nombre_servicio_simple = servicio_seleccionado.replace(' ', '_').replace('/', '_').replace('\\', '_')
@@ -1393,7 +1399,7 @@ def main():
                     if success and df_creacion is not None:
                         success = adicionar_a_archivo_principal(
                             df_creacion, 
-                            "aus_creacion_pacientes2.csv", 
+                            st.secrets["file_creacion_pacientes2"], 
                             "creación"
                         )
                         if success:
@@ -1402,7 +1408,7 @@ def main():
                         st.error(f"❌ No se pudo leer el archivo: {input_filename}")
         
         with col_gen2:
-            if st.button("📊 ADICIONAR a aus_asistencia_pacientes2.csv", type="primary", key="adicionar_asistencia", use_container_width=True):
+            if st.button("📊 ADICIONAR a asistencia_pacientes2", type="primary", key="adicionar_asistencia", use_container_width=True):
                 with st.spinner("Adicionando registros a asistencia..."):
                     success = crear_archivo_asistencia_desde_input(servicio_seleccionado)
                     if success:
