@@ -354,8 +354,7 @@ class SistemaEnfermeria:
         
         self.TURNOS_NOCTURNOS = ["Nocturno (A y B) (20:30-8:00)"]
         
-        self.archivo_datos = "datos_enfermeria.json"
-        self.cargar_datos()
+        # ELIMINADO: archivos locales
         self.sistema_asistencia = SistemaAsistencia()
         self.sistema_correo = SistemaCorreo()
 
@@ -364,19 +363,6 @@ class SistemaEnfermeria:
         mexico_tz = pytz.timezone('America/Mexico_City')
         ahora_mexico = datetime.datetime.now(mexico_tz)
         return ahora_mexico
-
-    def cargar_datos(self):
-        """Carga los datos desde el archivo JSON"""
-        if os.path.exists(self.archivo_datos):
-            with open(self.archivo_datos, 'r', encoding='utf-8') as f:
-                self.usuarios = json.load(f)
-        else:
-            self.usuarios = {}
-
-    def guardar_datos(self):
-        """Guarda los datos en el archivo JSON"""
-        with open(self.archivo_datos, 'w', encoding='utf-8') as f:
-            json.dump(self.usuarios, f, ensure_ascii=False, indent=2)
 
     def conectar_ssh(self):
         """Establece conexión SSH con el servidor remoto"""
@@ -395,7 +381,7 @@ class SistemaEnfermeria:
             return None
 
     def verificar_password_remoto(self, password):
-        """Verifica si la contraseña ya existe en el archivo remoto - MEJORADA"""
+        """Verifica si la contraseña ya existe en el archivo remoto"""
         ssh = self.conectar_ssh()
         if not ssh:
             return False, "No se pudo conectar al servidor para verificar la contraseña"
@@ -443,16 +429,11 @@ class SistemaEnfermeria:
             return False, f"Error al verificar contraseña: {str(e)}"
 
     def validar_numero_economico(self, numero):
-        """Valida que el número económico sea único tanto local como remotamente - CORREGIDA"""
-        # Verificar localmente
-        if numero in self.usuarios:
-            return False
-        
+        """Valida que el número económico sea único en archivo remoto"""
         # Verificar remotamente en aus_creacion_enfermeras2.csv
         ssh = self.conectar_ssh()
         if not ssh:
-            # Si no puede conectar, permitir el registro solo local
-            return True
+            return False
         
         try:
             sftp = ssh.open_sftp()
@@ -492,14 +473,13 @@ class SistemaEnfermeria:
                 ssh.close()
             except:
                 pass
-            # En caso de error, permitir registro solo local
-            return True
+            return False
 
     def agregar_registro_remoto(self, datos_usuario):
         """Agrega un registro al archivo remoto aus_creacion_enfermeras2.csv con los nuevos campos"""
         ssh = self.conectar_ssh()
         if not ssh:
-            st.warning("⚠️ No se pudo conectar al servidor remoto. El registro se guardó solo localmente.")
+            st.error("❌ No se pudo conectar al servidor remoto.")
             return False
         
         try:
@@ -555,6 +535,58 @@ class SistemaEnfermeria:
                 pass
             return False
 
+    def buscar_usuario_por_password(self, password):
+        """Buscar usuario por contraseña en archivo remoto"""
+        ssh = self.conectar_ssh()
+        if not ssh:
+            return None, None
+        
+        try:
+            sftp = ssh.open_sftp()
+            remote_file_path = f"{self.remote_config['remote_dir']}/{self.remote_config['file_creacion_enfermeras2']}"
+            
+            # Verificar si el archivo existe
+            try:
+                with sftp.file(remote_file_path, 'r') as archivo_remoto:
+                    contenido = archivo_remoto.read().decode('utf-8')
+            except:
+                contenido = ""
+            
+            sftp.close()
+            ssh.close()
+            
+            if not contenido.strip():
+                return None, None
+            
+            # Leer el archivo CSV y buscar la contraseña
+            try:
+                df = pd.read_csv(io.StringIO(contenido))
+                
+                # Buscar la contraseña en la columna 5 (password)
+                if not df.empty and len(df.columns) > 5:
+                    for index, row in df.iterrows():
+                        if str(row[5]) == password:  # Columna de password
+                            # Crear objeto usuario con los datos del archivo remoto
+                            usuario = {
+                                'numero_economico': str(row[0]),
+                                'nombre_completo': str(row[2]),  # nombre_completo
+                                'puesto': str(row[1]),           # puesto
+                                'servicio': str(row[3]),         # servicio
+                                'turno_laboral': str(row[4]),    # turno
+                                'password': str(row[5]),         # password
+                                'correo_electronico': str(row[6]) if len(df.columns) > 6 else "",  # email
+                                'suplencia': str(row[7]) if len(df.columns) > 7 else "NO"  # suplencia
+                            }
+                            return usuario['numero_economico'], usuario
+                
+                return None, None
+                
+            except Exception as e:
+                return None, None
+                
+        except Exception as e:
+            return None, None
+
     def obtener_registro_anterior_asistencia(self, numero_economico):
         """Obtiene el registro anterior del usuario en el archivo de asistencia"""
         ssh = self.conectar_ssh()
@@ -591,19 +623,10 @@ class SistemaEnfermeria:
             return registros_usuario.iloc[-1].to_dict()
             
         except Exception as e:
-            st.error(f"❌ Error al leer archivo de asistencia remoto: {e}")
-            try:
-                sftp.close()
-            except:
-                pass
-            try:
-                ssh.close()
-            except:
-                pass
             return None
 
     def mover_registros_anteriores_historico(self, numero_economico):
-        """Mueve TODOS los registros anteriores del usuario al histórico - CORREGIDO COMPLETAMENTE"""
+        """Mueve TODOS los registros anteriores del usuario al histórico"""
         ssh = self.conectar_ssh()
         if not ssh:
             st.error("❌ No se pudo conectar al servidor para mover registros al histórico")
@@ -679,7 +702,6 @@ class SistemaEnfermeria:
                     df_historico = pd.DataFrame(columns=df_asistencia.columns)
                 
                 # CORRECCIÓN CRÍTICA: Asegurar que los registros a mover tengan la misma estructura
-                # Mantener solo las columnas que existen en ambos DataFrames
                 columnas_comunes = [col for col in registros_usuario.columns if col in df_historico.columns]
                 if not columnas_comunes:
                     # Si no hay columnas comunes, usar las del histórico
@@ -726,10 +748,10 @@ class SistemaEnfermeria:
             return False
 
     def agregar_asistencia_remota(self, datos_asistencia):
-        """Agrega un registro de asistencia al archivo remoto con gestión de histórico - CORREGIDO"""
+        """Agrega un registro de asistencia al archivo remoto con gestión de histórico"""
         ssh = self.conectar_ssh()
         if not ssh:
-            st.warning("⚠️ No se pudo conectar al servidor remoto. El registro de asistencia se guardó solo localmente.")
+            st.error("❌ No se pudo conectar al servidor remoto.")
             return False
         
         try:
@@ -827,7 +849,7 @@ class SistemaEnfermeria:
             return self.obtener_fecha_hora_actual_mexico().strftime("%Y-%m-%d")
 
     def validar_password(self, password):
-        """Valida que la contraseña cumpla con los requisitos de seguridad RESTRINGIDOS"""
+        """Valida que la contraseña cumpla con los requisitos de seguridad"""
         errores = []
         
         # Longitud mínima
@@ -918,13 +940,6 @@ class SistemaEnfermeria:
         </div>
         """, unsafe_allow_html=True)
 
-    def buscar_usuario_por_password(self, password):
-        """Buscar usuario por contraseña (ahora única)"""
-        for numero_economico, usuario in self.usuarios.items():
-            if usuario['password'] == password:
-                return numero_economico, usuario
-        return None, None
-
     def mostrar_seleccion_modo(self):
         """Muestra la selección de modo (Login o Registro)"""
         st.title("🏥 Sistema de Registro de Enfermería")
@@ -960,7 +975,7 @@ class SistemaEnfermeria:
                 st.rerun()
 
     def registrar_usuario(self):
-        """Interfaz de registro de usuario - CON VERIFICACIÓN DE PASSWORD ÚNICO EN ARCHIVO REMOTO"""
+        """Interfaz de registro de usuario - SOLO ARCHIVOS REMOTOS"""
         # Botón para volver al menú principal
         if st.button("← Volver al Menú Principal"):
             st.session_state.modo = None
@@ -1000,11 +1015,7 @@ class SistemaEnfermeria:
                 st.write(f"**Suplencia:** {datos.get('suplencia', 'NO')}")
                 st.write(f"**Fecha de registro:** {datos['fecha_registro']}")
             
-            # Estado del almacenamiento remoto
-            if datos['exito_remoto']:
-                st.success("✅ **Registro guardado en servidor remoto**")
-            else:
-                st.warning("⚠️ **Registro guardado solo localmente** (error en servidor remoto)")
+            st.success("✅ **Registro guardado en servidor remoto**")
             
             # Información importante para el usuario
             st.info("""
@@ -1052,10 +1063,10 @@ class SistemaEnfermeria:
                     'password': '',
                     'confirmar_password': '',
                     'correo_electronico': '',
-                    'suplencia': 'NO'  # NUEVO CAMPO: suplencia por defecto NO
+                    'suplencia': 'NO'
                 }
             
-            # Mostrar formulario de registro SIN clear_on_submit
+            # Mostrar formulario de registro
             with st.form("formulario_registro", clear_on_submit=False):
                 col1, col2 = st.columns(2)
                 
@@ -1237,77 +1248,56 @@ class SistemaEnfermeria:
                     
                     # Validaciones
                     errores = []
-                    campos_con_error = []
                     
-                    # VERIFICACIÓN MEJORADA DEL NÚMERO ECONÓMICO
+                    # VERIFICACIÓN DEL NÚMERO ECONÓMICO EN ARCHIVO REMOTO
                     if not numero_economico:
                         errores.append("El número económico es obligatorio.")
-                        campos_con_error.append('numero_economico')
                     else:
                         with st.spinner("🔍 Verificando número económico..."):
                             numero_valido = self.validar_numero_economico(numero_economico)
                         if not numero_valido:
                             errores.append("Este número económico ya está registrado en el sistema. Intente con otro.")
-                            campos_con_error.append('numero_economico')
                     
                     if not nombre_completo:
                         errores.append("El nombre completo es obligatorio.")
-                        campos_con_error.append('nombre_completo')
                     elif len(nombre_completo.strip().split()) < 2:
                         errores.append("Ingrese nombre(s) y apellido(s) completos.")
-                        campos_con_error.append('nombre_completo')
                     
                     if not puesto:
                         errores.append("Debe seleccionar un puesto.")
-                        campos_con_error.append('puesto')
                     
                     if not servicio:
                         errores.append("Debe seleccionar un servicio.")
-                        campos_con_error.append('servicio')
                     
                     if not turno_laboral:
                         errores.append("Debe seleccionar un turno laboral.")
-                        campos_con_error.append('turno_laboral')
                     
                     if not suplencia:
                         errores.append("Debe indicar si es suplencia o no.")
-                        campos_con_error.append('suplencia')
                     
                     if not password:
                         errores.append("La contraseña es obligatoria.")
-                        campos_con_error.append('password')
                     else:
                         # Validar formato de contraseña
                         password_valida, mensajes_error = self.validar_password(password)
                         if not password_valida:
                             for error in mensajes_error:
                                 errores.append(error)
-                            campos_con_error.append('password')
                         elif password != confirmar_password:
                             errores.append("Las contraseñas no coinciden.")
-                            campos_con_error.append('password')
-                            campos_con_error.append('confirmar_password')
                         else:
-                            # Verificar que la contraseña sea única LOCALMENTE
-                            usuario_existente, _ = self.buscar_usuario_por_password(password)
-                            if usuario_existente:
-                                errores.append("Esta contraseña ya está en uso. Elija una contraseña única.")
-                                campos_con_error.append('password')
-                            else:
-                                # NUEVA VERIFICACIÓN: Verificar que la contraseña sea única en el archivo remoto
-                                with st.spinner("🔍 Verificando contraseña en sistema remoto..."):
-                                    password_existe_remoto, mensaje_remoto = self.verificar_password_remoto(password)
-                                
-                                if password_existe_remoto:
-                                    errores.append(mensaje_remoto)
-                                    campos_con_error.append('password')
+                            # NUEVA VERIFICACIÓN: Verificar que la contraseña sea única en el archivo remoto
+                            with st.spinner("🔍 Verificando contraseña en sistema remoto..."):
+                                password_existe_remoto, mensaje_remoto = self.verificar_password_remoto(password)
+                            
+                            if password_existe_remoto:
+                                errores.append(mensaje_remoto)
                     
                     # Validar correo si se proporcionó
                     if correo_electronico:
                         correo_valido, mensaje_correo = self.validar_correo(correo_electronico)
                         if not correo_valido:
                             errores.append(mensaje_correo)
-                            campos_con_error.append('correo_electronico')
                     
                     if errores:
                         # Mostrar errores específicos
@@ -1316,27 +1306,12 @@ class SistemaEnfermeria:
                             st.error(f"❌ {error}")
                         
                         # Sugerir mostrar la contraseña si hay errores en ella
-                        if 'password' in campos_con_error:
+                        if any('contraseña' in error.lower() for error in errores):
                             st.warning("💡 **Sugerencia:** Active 'Mostrar contraseña' para verificar los caracteres ingresados.")
                         
                         return
                     
                     # Si no hay errores, proceder con el registro
-                    # Guardar usuario localmente
-                    self.usuarios[numero_economico] = {
-                        'nombre_completo': nombre_completo,
-                        'puesto': puesto,
-                        'servicio': servicio,
-                        'turno_laboral': turno_laboral,
-                        'password': password,
-                        'correo_electronico': correo_electronico,
-                        'suplencia': suplencia,  # NUEVO CAMPO
-                        'registros_entrada': [],
-                        'fecha_registro': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    
-                    self.guardar_datos()
-                    
                     # Preparar datos para el archivo remoto CON LOS NUEVOS CAMPOS
                     datos_remoto = {
                         'numero_economico': numero_economico,
@@ -1346,12 +1321,16 @@ class SistemaEnfermeria:
                         'turno_laboral': turno_laboral,
                         'password': password,
                         'correo_electronico': correo_electronico,
-                        'suplencia': suplencia  # NUEVO CAMPO
+                        'suplencia': suplencia
                     }
                     
                     # Agregar registro al archivo remoto
                     with st.spinner("Guardando registro en servidor remoto..."):
                         exito_remoto = self.agregar_registro_remoto(datos_remoto)
+                    
+                    if not exito_remoto:
+                        st.error("❌ Error al guardar en servidor remoto. Intente nuevamente.")
+                        return
                     
                     # Limpiar el formulario después de registro exitoso
                     st.session_state.form_data = {
@@ -1377,13 +1356,12 @@ class SistemaEnfermeria:
                         'password': password,
                         'correo_electronico': correo_electronico,
                         'suplencia': suplencia,
-                        'fecha_registro': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        'exito_remoto': exito_remoto
+                        'fecha_registro': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     st.rerun()
 
     def mostrar_login(self):
-        """Pantalla de inicio de sesión - SOLO PIDE PASSWORD"""
+        """Pantalla de inicio de sesión - SOLO ARCHIVOS REMOTOS"""
         # Botón para volver al menú principal
         if st.button("← Volver al Menú Principal"):
             st.session_state.modo = None
@@ -1410,8 +1388,9 @@ class SistemaEnfermeria:
                     st.error("Por favor, ingrese su contraseña.")
                     return
                 
-                # Buscar usuario por contraseña
-                numero_economico, usuario = self.buscar_usuario_por_password(password)
+                # Buscar usuario por contraseña EN ARCHIVO REMOTO
+                with st.spinner("🔍 Verificando credenciales en servidor..."):
+                    numero_economico, usuario = self.buscar_usuario_por_password(password)
                 
                 if not usuario:
                     st.error("❌ Contraseña incorrecta o no encontrada.")
@@ -1429,6 +1408,7 @@ class SistemaEnfermeria:
         st.info("""
         💡 **Recordatorio:**
         - Solo necesita su **contraseña única** para acceder
+        - El sistema verifica directamente en el servidor remoto
         - Si olvidó su contraseña, contacte al administrador
         """)
         
@@ -1513,10 +1493,10 @@ class SistemaEnfermeria:
                     'turno_laboral': usuario['turno_laboral'],
                     'hora_entrada': hora_actual,
                     'incidencias': "NO",
-                    'suplencia': usuario.get('suplencia', 'NO')  # NUEVO CAMPO: suplencia
+                    'suplencia': usuario.get('suplencia', 'NO')
                 }
                 
-                # Registrar en archivo remoto - CORREGIDO: Esta función ahora garantiza mover TODOS los registros anteriores
+                # Registrar en archivo remoto
                 exito_remoto = self.agregar_asistencia_remota(datos_asistencia)
                 
                 # Registrar también en el sistema local de asistencia
@@ -1569,11 +1549,6 @@ class SistemaEnfermeria:
                                 st.success(f"📧 {mensaje_correo}")
                             else:
                                 st.warning(f"⚠️ {mensaje_correo}")
-                    
-                    # Actualizar registros de entrada en el sistema principal
-                    fecha_hora_str = ahora_mexico.strftime("%Y-%m-%d %H:%M:%S")
-                    self.usuarios[numero_economico]['registros_entrada'].append(fecha_hora_str)
-                    self.guardar_datos()
                         
                     # Recargar la página para actualizar el estado
                     st.rerun()
@@ -1673,11 +1648,10 @@ class SistemaEnfermeria:
                             'turno_laboral': usuario['turno_laboral'],
                             'hora_entrada': "NO",  # CORREGIDO: Para incidencias debe ser "NO"
                             'incidencias': codigo_incidencia,
-                            'suplencia': usuario.get('suplencia', 'NO')  # NUEVO CAMPO: suplencia
+                            'suplencia': usuario.get('suplencia', 'NO')
                         }
                         
-                        # CORREGIDO: La función agregar_asistencia_remota ahora maneja automáticamente el histórico
-                        # Registrar en archivo remoto - Esta función ahora garantiza mover TODOS los registros anteriores
+                        # Registrar en archivo remoto
                         exito_remoto = self.agregar_asistencia_remota(datos_asistencia)
                         
                         # Registrar también en el sistema local de asistencia
