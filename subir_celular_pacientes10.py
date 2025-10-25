@@ -1154,7 +1154,7 @@ def crear_archivo_asistencia_desde_input(servicio_nombre):
         return False
 
 def main():
-    st.title("🏥 Sistema de Gestión de Ausentismo - Pacientes")
+#    st.title("🏥 Sistema de Gestión de Ausentismo - Pacientes")
     
     # Configuración de la página
     st.set_page_config(
