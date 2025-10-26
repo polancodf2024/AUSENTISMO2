@@ -1155,37 +1155,37 @@ def crear_archivo_asistencia_desde_input(servicio_nombre):
 
 def main():
 #    st.title("🏥 Sistema de Gestión de Ausentismo - Pacientes")
-    
+
     # Configuración de la página
     st.set_page_config(
         page_title="Sistema Ausentismo Pacientes",
         page_icon="🏥",
         layout="wide"
     )
-    
+
     # Sistema de autenticación
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
         st.session_state.proceso_inicio_ejecutado = False
-    
+
     if not st.session_state.authenticated:
         st.title("🏥 Sistema de Gestión de Ausentismo - Pacientes")
         st.markdown("---")
-        
+
         col1, col2, col3 = st.columns([1, 2, 1])
-        
+
         with col2:
             st.subheader("🔐 Iniciar Sesión")
-            
+
             login = st.text_input("👤 Usuario", placeholder="Ingrese su usuario")
             password = st.text_input("🔒 Contraseña", type="password", placeholder="Ingrese su contraseña")
-            
+
             if st.button("🚀 Ingresar al Sistema", type="primary", use_container_width=True):
                 if login == "administracion" and password == "gabylira2026":
                     st.session_state.authenticated = True
                     st.success("✅ ¡Autenticación exitosa!")
                     st.info("🔄 Ejecutando proceso automático de inicio de sesión...")
-                    
+
                     # Ejecutar proceso automático de inicio de sesión
                     with st.spinner("Procesando..."):
                         success = proceso_inicio_sesion()
@@ -1197,11 +1197,11 @@ def main():
                             st.session_state.authenticated = False
                 else:
                     st.error("❌ Usuario o contraseña incorrectos")
-        
+
         return
-    
+
     # Si está autenticado, mostrar la aplicación completa
-    
+
     # Lista exacta de los 19 servicios del archivo Excel (solo los 11 primeros)
     servicios = [
         "UNIDAD CORONARIA",
@@ -1216,49 +1216,49 @@ def main():
         "HOSPITALIZACIÓN OCTAVO PISO",
         "HOSPITALIZACIÓN NOVENO PISO"
     ]
-    
+
     # Sidebar para configuración
     st.sidebar.header("⚙️ Configuración")
-    
+
     # Opción para modo supervisor
     supervisor_mode = st.secrets.get("supervisor_mode", False)
     if supervisor_mode:
         st.sidebar.info("🔒 **Modo Supervisor Activado**")
-    
+
     # Opción para modo debug
     debug_mode = st.secrets.get("debug_mode", False)
     if debug_mode:
         st.sidebar.warning("🐛 **Modo Debug Activado**")
-    
+
     # Botón de cierre de sesión
     if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.proceso_inicio_ejecutado = False
         st.rerun()
-    
+
     # Tabs principales - SOLO 2 PESTAÑAS (sin Información del Sistema)
     tab1, tab2 = st.tabs([
-        "📤 Subir Archivos por Servicio", 
+        "📤 Subir Archivos por Servicio",
         "📊 Generar Archivos del Sistema"
     ])
-    
+
     with tab1:
         st.header("📤 Subir Archivos por Servicio")
         st.info("💡 **Cada servicio tiene su propio uploader. Sube archivos Excel que se convertirán automáticamente a CSV y se subirán al servidor remoto.**")
-        
+
         # Crear uploaders independientes organizados en 3 columnas
         st.subheader("📁 Uploaders por Servicio")
-        
+
         # Dividir en 3 columnas para mejor organización
         col1, col2, col3 = st.columns(3)
-        
+
         uploaded_files = {}
-        
+
         with col1:
             for i in range(0, 4):  # Primeros 4 servicios
                 servicio = servicios[i]
                 nombre_servicio_simple = servicio.replace(' ', '_').replace('/', '_').replace('\\', '_')
-                
+
                 st.markdown(f"**{servicio}**")
                 uploaded_file = st.file_uploader(
                     f"Subir Excel para {servicio}",
@@ -1269,12 +1269,12 @@ def main():
                 if uploaded_file:
                     uploaded_files[servicio] = uploaded_file
                     st.success(f"✅ {uploaded_file.name}")
-        
+
         with col2:
             for i in range(4, 8):  # Siguientes 4 servicios
                 servicio = servicios[i]
                 nombre_servicio_simple = servicio.replace(' ', '_').replace('/', '_').replace('\\', '_')
-                
+
                 st.markdown(f"**{servicio}**")
                 uploaded_file = st.file_uploader(
                     f"Subir Excel para {servicio}",
@@ -1285,12 +1285,12 @@ def main():
                 if uploaded_file:
                     uploaded_files[servicio] = uploaded_file
                     st.success(f"✅ {uploaded_file.name}")
-        
+
         with col3:
             for i in range(8, 11):  # Últimos 3 servicios
                 servicio = servicios[i]
                 nombre_servicio_simple = servicio.replace(' ', '_').replace('/', '_').replace('\\', '_')
-                
+
                 st.markdown(f"**{servicio}**")
                 uploaded_file = st.file_uploader(
                     f"Subir Excel para {servicio}",
@@ -1301,31 +1301,31 @@ def main():
                 if uploaded_file:
                     uploaded_files[servicio] = uploaded_file
                     st.success(f"✅ {uploaded_file.name}")
-        
+
         # Botón para procesar todos los archivos subidos
         if uploaded_files:
             st.subheader("🔄 Procesar Archivos Subidos")
-            
+
             if st.button("🚀 Procesar Todos los Archivos", type="primary", key="procesar_todos"):
                 resultados = []
-                
+
                 for servicio, uploaded_file in uploaded_files.items():
                     with st.spinner(f"Procesando {servicio}..."):
                         try:
                             nombre_servicio_simple = servicio.replace(' ', '_').replace('/', '_').replace('\\', '_')
                             csv_filename = f"input_{nombre_servicio_simple}.csv"
-                            
+
                             # Convertir Excel a CSV
                             csv_path, df_resultado = excel_to_csv(
                                 uploaded_file,
                                 csv_filename,
                                 servicio_nombre=servicio
                             )
-                            
+
                             if csv_path and df_resultado is not None:
                                 # Subir al servidor remoto
                                 remote_path, success = upload_to_remote(csv_path, csv_filename)
-                                
+
                                 if success:
                                     resultados.append({
                                         'servicio': servicio,
@@ -1350,7 +1350,7 @@ def main():
                                     'estado': '❌ Error conversión',
                                     'ruta_remota': 'N/A'
                                 })
-                                
+
                         except Exception as e:
                             resultados.append({
                                 'servicio': servicio,
@@ -1359,60 +1359,93 @@ def main():
                                 'estado': f'❌ Error: {str(e)}',
                                 'ruta_remota': 'N/A'
                             })
-                
+
                 # Mostrar resumen de resultados
                 st.subheader("📊 Resumen de Procesamiento")
                 df_resultados = pd.DataFrame(resultados)
                 st.dataframe(df_resultados, use_container_width=True)
-                
+
                 # Estadísticas
                 exitosos = sum(1 for r in resultados if '✅' in r['estado'])
                 st.info(f"**Procesamiento completado:** {exitosos} de {len(resultados)} archivos procesados exitosamente")
-        
+
         else:
             st.info("ℹ️ **Sube archivos Excel en los uploaders de arriba para comenzar el procesamiento**")
-    
+
     with tab2:
         st.header("📊 Generar Archivos del Sistema")
         st.info("💡 **Genera los archivos principales del sistema directamente en el servidor remoto**")
-        
-        # Selección de servicio para procesar
-        servicio_seleccionado = st.selectbox(
-            "Selecciona el servicio para generar archivos:",
-            servicios,
-            key="servicio_generar_tab3"
-        )
-        
+
         # Botones para generar archivos directamente en el servidor remoto
         st.subheader("🔄 Generar Archivos en Servidor Remoto")
-        
+
         col_gen1, col_gen2 = st.columns(2)
-        
+
         with col_gen1:
             if st.button("📄 ADICIONAR a creacion_pacientes2", type="primary", key="adicionar_creacion", use_container_width=True):
                 with st.spinner("Adicionando registros a creación..."):
-                    # Leer archivo input
-                    nombre_servicio_simple = servicio_seleccionado.replace(' ', '_').replace('/', '_').replace('\\', '_')
-                    input_filename = f"input_{nombre_servicio_simple}.csv"
-                    
-                    df_creacion, success = leer_archivo_remoto(input_filename)
-                    if success and df_creacion is not None:
+                    # Procesar TODOS los archivos input del servidor
+                    archivos_input = listar_archivos_remotos("input_")
+
+                    if not archivos_input:
+                        st.error("❌ No se encontraron archivos input en el servidor")
+                        return
+
+                    # Combinar todos los archivos input en un solo DataFrame
+                    todos_los_registros = []
+
+                    for archivo in archivos_input:
+                        df_servicio, success = leer_archivo_remoto(archivo)
+                        if success and df_servicio is not None and len(df_servicio) > 0:
+                            todos_los_registros.append(df_servicio)
+
+                    if todos_los_registros:
+                        df_completo = pd.concat(todos_los_registros, ignore_index=True)
+
                         success = adicionar_a_archivo_principal(
-                            df_creacion, 
-                            st.secrets["file_creacion_pacientes2"], 
+                            df_completo,
+                            st.secrets["file_creacion_pacientes2"],
                             "creación"
                         )
                         if success:
-                            st.success("✅ **Registros ADICIONADOS exitosamente a creación!**")
+                            st.success(f"✅ **{len(df_completo)} registros ADICIONADOS exitosamente a creación!**")
+                            st.info(f"📁 Archivos procesados: {len(archivos_input)}")
                     else:
-                        st.error(f"❌ No se pudo leer el archivo: {input_filename}")
-        
+                        st.error("❌ No se pudieron leer los archivos input")
+
         with col_gen2:
             if st.button("📊 ADICIONAR a asistencia_pacientes2", type="primary", key="adicionar_asistencia", use_container_width=True):
                 with st.spinner("Adicionando registros a asistencia..."):
-                    success = crear_archivo_asistencia_desde_input(servicio_seleccionado)
-                    if success:
-                        st.success("✅ **Registros ADICIONADOS exitosamente a asistencia!**")
+                    # Procesar TODOS los servicios automáticamente
+                    archivos_input = listar_archivos_remotos("input_")
+
+                    if not archivos_input:
+                        st.error("❌ No se encontraron archivos input en el servidor")
+                        return
+
+                    total_registros = 0
+                    archivos_procesados = 0
+
+                    for archivo in archivos_input:
+                        # Extraer nombre del servicio del nombre del archivo
+                        servicio_nombre = archivo.replace('input_', '').replace('.csv', '').replace('_', ' ')
+
+                        success = crear_archivo_asistencia_desde_input(servicio_nombre)
+                        if success:
+                            archivos_procesados += 1
+                            # Obtener cantidad de registros procesados para este servicio
+                            df_servicio, _ = leer_archivo_remoto(archivo)
+                            if df_servicio is not None:
+                                # Contar solo registros sin alta
+                                registros_sin_alta = len([row for idx, row in df_servicio.iterrows()
+                                                         if 'fecha_alta' in row and row['fecha_alta'] != 'Alta'])
+                                total_registros += registros_sin_alta
+
+                    if archivos_procesados > 0:
+                        st.success(f"✅ **{total_registros} registros de asistencia ADICIONADOS exitosamente!**")
+                        st.info(f"📁 Archivos procesados: {archivos_procesados}")
+                    else:
+                        st.error("❌ No se pudieron procesar los archivos para asistencia")
 
 if __name__ == "__main__":
     main()
