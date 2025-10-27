@@ -699,6 +699,7 @@ def formatear_fecha_alta(fecha_alta):
     except Exception:
         return ""
 
+
 def excel_to_csv(excel_file, csv_file=None, sheet_name=0, fecha_nac_col=None, servicio_nombre=None):
     """
     Convierte un archivo Excel a CSV con layout específico
@@ -723,9 +724,38 @@ def excel_to_csv(excel_file, csv_file=None, sheet_name=0, fecha_nac_col=None, se
         # Buscar columnas en el DataFrame original
         column_mapping = {}
         
-        # Expediente
-        expediente_cols = [col for col in df.columns if 'expediente' in str(col).lower() or 'exp' in str(col).lower()]
-        column_mapping['expediente'] = expediente_cols[0] if expediente_cols else None
+        # EXPEDIENTE - USAR EXCLUSIVAMENTE COLUMNA "Noreg" (columna B)
+        if 'Noreg' in df.columns:
+            column_mapping['expediente'] = 'Noreg'
+            st.success(f"✅ **Columna 'Noreg' encontrada para expediente**")
+            
+            # CONVERTIR COLUMNA NOREG A ENTERO PARA EVITAR .0
+            try:
+                # Primero convertir a string, luego limpiar y convertir a entero
+                df['Noreg'] = df['Noreg'].astype(str).str.replace('.0', '', regex=False)
+                df['Noreg'] = df['Noreg'].replace('nan', '').replace('None', '')
+                st.success("✅ **Columna 'Noreg' convertida a formato entero**")
+            except Exception as e:
+                st.warning(f"⚠️ No se pudo convertir columna 'Noreg' a entero: {str(e)}")
+                
+        else:
+            # Buscar variaciones del nombre
+            noreg_variants = [col for col in df.columns if 'noreg' in str(col).lower()]
+            if noreg_variants:
+                column_mapping['expediente'] = noreg_variants[0]
+                st.success(f"✅ **Columna similar a 'Noreg' encontrada:** {noreg_variants[0]}")
+                
+                # CONVERTIR COLUMNA NOREG A ENTERO PARA EVITAR .0
+                try:
+                    df[noreg_variants[0]] = df[noreg_variants[0]].astype(str).str.replace('.0', '', regex=False)
+                    df[noreg_variants[0]] = df[noreg_variants[0]].replace('nan', '').replace('None', '')
+                    st.success(f"✅ **Columna '{noreg_variants[0]}' convertida a formato entero**")
+                except Exception as e:
+                    st.warning(f"⚠️ No se pudo convertir columna '{noreg_variants[0]}' a entero: {str(e)}")
+                    
+            else:
+                column_mapping['expediente'] = None
+                st.warning("⚠️ **No se encontró columna 'Noreg' para expediente**")
         
         # Número cama
         cama_cols = [col for col in df.columns if 'cama' in str(col).lower() or 'cama' in str(col).lower()]
@@ -872,15 +902,17 @@ def excel_to_csv(excel_file, csv_file=None, sheet_name=0, fecha_nac_col=None, se
             
             registros_procesados += 1
             
-            # Expediente
+            # EXPEDIENTE - USAR EXCLUSIVAMENTE COLUMNA "NOREG" (YA CONVERTIDA A ENTERO)
             if column_mapping['expediente'] is not None:
                 expediente_val = row[column_mapping['expediente']]
-                if pd.isna(expediente_val) or expediente_val == '':
-                    expedientes.append(f"EXP{10000 + idx}")
+                if pd.isna(expediente_val) or expediente_val == '' or str(expediente_val).strip() in ['', 'nan', 'None']:
+                    expedientes.append("")  # ⬅️ DEJAR VACÍO si no tiene valor
                 else:
-                    expedientes.append(str(expediente_val))
+                    # Ya está convertido a string sin .0
+                    expediente_str = str(expediente_val).strip()
+                    expedientes.append(expediente_str)  # ⬅️ USAR VALOR DE NOREG YA LIMPIO
             else:
-                expedientes.append(f"EXP{10000 + idx}")
+                expedientes.append("")  # ⬅️ DEJAR VACÍO si no existe columna Noreg
             
             # Número cama
             if column_mapping['numero_cama'] is not None:
@@ -1012,6 +1044,15 @@ def excel_to_csv(excel_file, csv_file=None, sheet_name=0, fecha_nac_col=None, se
         st.info(f"📊 **Total de registros convertidos:** {len(layout_df)}")
         st.info(f"🏥 **Servicio asignado:** {servicio_nombre}")
         
+        # Mostrar estadísticas de expedientes
+        expedientes_con_valor = sum(1 for x in expedientes if x != "")
+        st.info(f"📋 **Expedientes con valor 'Noreg':** {expedientes_con_valor} de {len(expedientes)}")
+        
+        # Mostrar algunos ejemplos de expedientes procesados
+        if expedientes_con_valor > 0:
+            ejemplos_expedientes = [exp for exp in expedientes if exp != ""][:5]
+            st.write(f"📝 **Ejemplos de expedientes procesados:** {ejemplos_expedientes}")
+        
         # Mostrar estadísticas de altas
         total_altas = sum(1 for x in fechas_alta if x == "Alta")
         st.info(f"📅 **Pacientes con alta:** {total_altas} de {len(fechas_alta)}")
@@ -1027,6 +1068,7 @@ def excel_to_csv(excel_file, csv_file=None, sheet_name=0, fecha_nac_col=None, se
         import traceback
         st.error(f"🔍 Detalles del error: {traceback.format_exc()}")
         return None, None
+
 
 def crear_archivo_asistencia_desde_input(servicio_nombre):
     """
