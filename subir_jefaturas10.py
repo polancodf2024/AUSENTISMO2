@@ -802,6 +802,7 @@ def mostrar_creacion_claves(user_info):
             else:
                 st.error("❌ Error al guardar el usuario")
 
+
 def mostrar_edicion_claves(user_info):
     """Muestra la interfaz para edición de registros en archivo de claves"""
     st.header("✏️ Edición de Usuarios en Archivo de Claves")
@@ -818,14 +819,14 @@ def mostrar_edicion_claves(user_info):
 
     # Selector de usuario a editar
     usuarios_opciones = [f"{row['numero_economico']} - {row['nombre_completo']}" for _, row in df.iterrows()]
-    
+
     # Usar session_state para mantener la selección del usuario
     if 'usuario_editar_seleccionado' not in st.session_state:
         st.session_state.usuario_editar_seleccionado = usuarios_opciones[0] if usuarios_opciones else None
 
     usuario_seleccionado = st.selectbox(
-        "Seleccione usuario a editar:", 
-        usuarios_opciones, 
+        "Seleccione usuario a editar:",
+        usuarios_opciones,
         key="usuario_editar",
         index=usuarios_opciones.index(st.session_state.usuario_editar_seleccionado) if st.session_state.usuario_editar_seleccionado in usuarios_opciones else 0
     )
@@ -833,11 +834,19 @@ def mostrar_edicion_claves(user_info):
     # Actualizar session_state cuando cambia la selección
     if usuario_seleccionado != st.session_state.get('usuario_editar_seleccionado'):
         st.session_state.usuario_editar_seleccionado = usuario_seleccionado
+        st.session_state.usuario_data_actual = None  # Limpiar datos cacheados
         st.rerun()
 
     if usuario_seleccionado:
         numero_economico_original = usuario_seleccionado.split(" - ")[0]
-        usuario_data = df[df['numero_economico'] == numero_economico_original].iloc[0]
+
+        # Cargar datos del usuario seleccionado (evitar cache)
+        if 'usuario_data_actual' not in st.session_state or st.session_state.get('usuario_numero_actual') != numero_economico_original:
+            usuario_data = df[df['numero_economico'] == numero_economico_original].iloc[0]
+            st.session_state.usuario_data_actual = usuario_data
+            st.session_state.usuario_numero_actual = numero_economico_original
+        else:
+            usuario_data = st.session_state.usuario_data_actual
 
         # Mostrar información actual del usuario
         st.subheader("👤 Información Actual del Usuario")
@@ -853,7 +862,7 @@ def mostrar_edicion_claves(user_info):
 
         with st.form("form_edicion_claves"):
             st.subheader("✏️ Modificar Datos del Usuario")
-            
+
             col1, col2 = st.columns(2)
 
             with col1:
@@ -867,115 +876,115 @@ def mostrar_edicion_claves(user_info):
                     "Número Económico*",
                     value=usuario_data['numero_economico'],
                     max_chars=10,
-                    key="num_economico_edit"
+                    key=f"num_economico_edit_{numero_economico_original}"
                 )
                 nuevo_puesto = st.selectbox(
                     "Puesto*",
                     options=CONFIG.PUESTOS,
                     index=puesto_index,
-                    key="puesto_select_edit"
+                    key=f"puesto_select_edit_{numero_economico_original}"
                 )
                 nuevo_servicio = st.selectbox(
                     "Servicio*",
                     options=CONFIG.SERVICIOS,
                     index=servicio_index,
-                    key="servicio_select_edit"
+                    key=f"servicio_select_edit_{numero_economico_original}"
                 )
                 nuevo_turno_laboral = st.selectbox(
                     "🕒 Turno laboral*",
                     options=CONFIG.TURNOS,
                     index=turno_index,
-                    key="turno_select_edit"
+                    key=f"turno_select_edit_{numero_economico_original}"
                 )
 
             with col2:
                 nuevo_nombre_completo = st.text_input(
                     "Nombre Completo*",
                     value=usuario_data['nombre_completo'],
-                    key="nombre_completo_edit"
+                    key=f"nombre_completo_edit_{numero_economico_original}"
                 )
                 nuevo_correo_electronico = st.text_input(
                     "Correo Electrónico",
                     value=usuario_data.get('correo_electronico', ''),
-                    key="correo_edit"
+                    key=f"correo_edit_{numero_economico_original}"
                 )
                 nueva_suplencia = st.selectbox(
                     "Suplencia*",
                     options=CONFIG.SUPLENCIA_OPCIONES,
                     index=suplencia_index,
-                    key="suplencia_select_edit"
+                    key=f"suplencia_select_edit_{numero_economico_original}"
                 )
                 nueva_password = st.text_input(
                     "Nueva Contraseña (dejar vacío para mantener actual)",
                     type="password",
-                    key="password_edit"
+                    key=f"password_edit_{numero_economico_original}"
                 )
                 confirmar_password = st.text_input(
                     "Confirmar Nueva Contraseña",
                     type="password",
-                    key="password_confirm_edit"
+                    key=f"password_confirm_edit_{numero_economico_original}"
                 )
 
             # Campos adicionales para asistencia
             st.markdown("---")
             st.subheader("📋 Actualización de Datos de Asistencia")
-            
+
             col3, col4 = st.columns(2)
-            
+
             with col3:
                 # Selector de fecha y hora personalizada
                 st.subheader("🗓️ Fecha y Hora del Registro")
                 fecha_personalizada = st.date_input(
                     "Fecha*",
                     value=datetime.now().date(),
-                    key="fecha_personalizada_edicion"
+                    key=f"fecha_personalizada_edicion_{numero_economico_original}"
                 )
-                
+
                 hora_personalizada = st.time_input(
                     "Hora*",
                     value=datetime.now().time(),
-                    key="hora_personalizada_edicion"
+                    key=f"hora_personalizada_edicion_{numero_economico_original}"
                 )
-                
+
                 # Convertir a string en el formato requerido
                 fecha_str = fecha_personalizada.strftime("%Y-%m-%d")
                 hora_str = hora_personalizada.strftime("%H:%M")
                 fecha_completa_str = f"{fecha_str} {hora_str}"
-                
+
                 st.info(f"**Fecha completa:** {fecha_completa_str}")
                 st.info(f"**Fecha del turno:** {fecha_str}")
-                
+
             with col4:
                 # Cargar datos actuales de asistencia para este usuario
                 df_asistencia = cargar_archivo_asistencia()
                 hora_entrada_actual = "NO"
                 incidencia_actual = "NO"
-                
+
                 if df_asistencia is not None and not df_asistencia.empty:
                     registro_asistencia = df_asistencia[
-                        (df_asistencia['numero_economico'] == numero_economico_original) & 
+                        (df_asistencia['numero_economico'] == numero_economico_original) &
                         (df_asistencia['fecha_turno'] == fecha_str)
                     ]
                     if not registro_asistencia.empty:
                         registro = registro_asistencia.iloc[0]
                         hora_entrada_actual = registro['hora_entrada'] if pd.notna(registro['hora_entrada']) and registro['hora_entrada'] != '' else "NO"
                         incidencia_actual = registro['incidencias'] if pd.notna(registro['incidencias']) and registro['incidencias'] != '' else "NO"
-                
+
                 # Encontrar índice actual para hora_entrada
                 hora_entrada_index = 0
                 if hora_entrada_actual in CONFIG.HORAS_ENTRADA:
                     hora_entrada_index = CONFIG.HORAS_ENTRADA.index(hora_entrada_actual)
-                
+
                 nueva_hora_entrada = st.selectbox(
                     "Hora de Entrada*",
                     options=CONFIG.HORAS_ENTRADA,
                     index=hora_entrada_index,
-                    key="hora_entrada_edit"
+                    key=f"hora_entrada_edit_{numero_economico_original}"
                 )
-                
+
                 # Crear opciones para incidencias
                 opciones_incidencias = ["NO"] + [f"{codigo} - {descripcion}" for codigo, descripcion in CONFIG.INCIDENCIAS.items()]
-                
+
                 # Encontrar índice actual para incidencias
                 incidencia_index = 0
                 if incidencia_actual != "NO":
@@ -984,14 +993,14 @@ def mostrar_edicion_claves(user_info):
                         if opcion.startswith(incidencia_actual):
                             incidencia_index = i
                             break
-                
+
                 nueva_incidencia_seleccionada = st.selectbox(
                     "Incidencias*",
                     options=opciones_incidencias,
                     index=incidencia_index,
-                    key="incidencia_select_edit"
+                    key=f"incidencia_select_edit_{numero_economico_original}"
                 )
-                
+
                 # Extraer solo el código de la incidencia si se seleccionó algo diferente a "NO"
                 nueva_incidencia_codigo = "NO"
                 if nueva_incidencia_seleccionada != "NO":
@@ -1010,7 +1019,7 @@ def mostrar_edicion_claves(user_info):
                     return
 
                 # Verificar si el nuevo número económico ya existe (si se cambió)
-                if (nuevo_numero_economico != numero_economico_original and 
+                if (nuevo_numero_economico != numero_economico_original and
                     nuevo_numero_economico in df['numero_economico'].values):
                     st.error("❌ El nuevo número económico ya existe")
                     return
@@ -1043,9 +1052,9 @@ def mostrar_edicion_claves(user_info):
 
                     # Actualizar registro en archivo de asistencia
                     if actualizar_registro_asistencia_manual(
-                        numero_economico_original, 
-                        nuevo_numero_economico, 
-                        nueva_hora_entrada, 
+                        numero_economico_original,
+                        nuevo_numero_economico,
+                        nueva_hora_entrada,
                         nueva_incidencia_codigo,
                         fecha_str,
                         hora_str
@@ -1054,9 +1063,13 @@ def mostrar_edicion_claves(user_info):
                     else:
                         st.warning("⚠️ Usuario actualizado pero hubo un error al actualizar el registro de asistencia")
 
-                    # Limpiar selección para forzar recarga
+                    # Limpiar selección y datos cacheados para forzar recarga
                     if 'usuario_editar_seleccionado' in st.session_state:
                         del st.session_state.usuario_editar_seleccionado
+                    if 'usuario_data_actual' in st.session_state:
+                        del st.session_state.usuario_data_actual
+                    if 'usuario_numero_actual' in st.session_state:
+                        del st.session_state.usuario_numero_actual
                     st.rerun()
                 else:
                     st.error("❌ Error al actualizar el usuario")
